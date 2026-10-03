@@ -15,9 +15,11 @@ import { fetchMergePdfListValues, mergePdfListSchema, type MergePdfListValues } 
 
 interface Props {
   onOpen: (jobId: number) => void
+  onAdd: () => void
+  refreshVersion: number
 }
 
-const InnerList = ({ onOpen }: Props) => {
+const InnerList = ({ onOpen, onAdd, refreshVersion }: Props) => {
   const { setIsEnableFetching } = useDxContext()
   const methods = useForm<MergePdfListValues>({
     resolver: zodResolver(mergePdfListSchema),
@@ -38,7 +40,13 @@ const InnerList = ({ onOpen }: Props) => {
         <Grid size={12}>
           <MergePdfSearchFilters />
         </Grid>
-        <Grid size={12}>{isLoading ? <SkeletonCustom /> : <MergePdfSearchResult onOpen={onOpen} />}</Grid>
+        <Grid size={12}>
+          {isLoading ? (
+            <SkeletonCustom />
+          ) : (
+            <MergePdfSearchResult onOpen={onOpen} onAdd={onAdd} refreshVersion={refreshVersion} />
+          )}
+        </Grid>
       </Grid>
     </FormProvider>
   )

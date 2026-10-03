@@ -27,6 +27,29 @@ export const useMergePdfPreview = (documentId: number | null) =>
     staleTime: 60_000
   })
 
+export const useMergePdfPagePreview = (
+  jobId: number | null,
+  pageId: number | null,
+  rotation: number,
+  enabled: boolean
+) =>
+  useQuery({
+    queryKey: [key, 'page-preview', jobId, pageId, rotation],
+    queryFn: async ({ signal }) => (await MergePdfServices.pagePreview(jobId ?? 0, pageId ?? 0, signal)).data,
+    enabled: enabled && jobId !== null && pageId !== null,
+    staleTime: 300_000,
+    retry: 1
+  })
+
+export const useMergePdfPageThumbnail = (jobId: number, pageId: number, rotation: number, enabled: boolean) =>
+  useQuery({
+    queryKey: [key, 'page-thumbnail', jobId, pageId, rotation],
+    queryFn: async ({ signal }) => (await MergePdfServices.pageThumbnail(jobId, pageId, signal)).data,
+    enabled,
+    staleTime: 300_000,
+    retry: 1
+  })
+
 export const useMergePdfActions = () => {
   const queryClient = useQueryClient()
   const accept = (response: AxiosResponse<ResultDataResponseI<MergePdfDetail>>) => {
@@ -40,6 +63,19 @@ export const useMergePdfActions = () => {
   }
   return {
     create: useMutation({ mutationFn: MergePdfServices.create, onSuccess: accept }),
+    deleteDraft: useMutation({
+      mutationFn: async (input: { jobId: number; rowVersion: number }) => {
+        const response = await MergePdfServices.deleteDraft(input.jobId, input.rowVersion)
+        if (!response.data.Status) throw new Error(response.data.Message)
+        return response
+      },
+      onSuccess: (_response, input) => {
+        queryClient.removeQueries({ queryKey: [key, 'detail', input.jobId] })
+        queryClient.removeQueries({ queryKey: [key, 'page-preview', input.jobId] })
+        queryClient.removeQueries({ queryKey: [key, 'page-thumbnail', input.jobId] })
+        void queryClient.invalidateQueries({ queryKey: [key, 'jobs'] })
+      }
+    }),
     saveDraft: useMutation({
       mutationFn: (input: { jobId: number; rowVersion: number; title: string; reference: string | null }) =>
         MergePdfServices.saveDraft(input.jobId, input.rowVersion, { title: input.title, reference: input.reference }),

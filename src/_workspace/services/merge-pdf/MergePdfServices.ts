@@ -4,7 +4,6 @@ import axiosRequest from '@/libs/axios/axiosRequest'
 import type { ResultDataResponseI } from '@/libs/axios/types/AxiosResponseInterface'
 
 const root = MergePdfAPI.API_ROOT_URL
-const directRoot = `${import.meta.env.VITE_API_URL.replace(/\/$/, '')}${root}`
 
 export const MergePdfServices = {
   list: (params: {
@@ -18,26 +17,32 @@ export const MergePdfServices = {
     sortDesc: boolean
   }) =>
     axiosRequest<ResultDataResponseI<MergePdfJob>>({
-      url: `${root}/jobs`,
-      method: 'GET',
-      params
+      url: `${root}/jobs/search`,
+      method: 'POST',
+      data: params
     }),
   detail: (jobId: number) =>
     axiosRequest<ResultDataResponseI<MergePdfDetail>>({
-      url: `${root}/jobs/${jobId}`,
-      method: 'GET'
+      url: `${root}/jobs/${jobId}/detail`,
+      method: 'POST'
     }),
   create: (fields: MergePdfForm) =>
     axiosRequest<ResultDataResponseI<MergePdfDetail>>({
-      url: `${root}/jobs`,
+      url: `${root}/jobs/create`,
       method: 'POST',
       data: fields
     }),
   saveDraft: (jobId: number, rowVersion: number, fields: MergePdfForm) =>
     axiosRequest<ResultDataResponseI<MergePdfDetail>>({
-      url: `${root}/jobs/${jobId}`,
-      method: 'PATCH',
+      url: `${root}/jobs/${jobId}/save-draft`,
+      method: 'POST',
       data: { ...fields, rowVersion }
+    }),
+  deleteDraft: (jobId: number, rowVersion: number) =>
+    axiosRequest<ResultDataResponseI<{ JOB_ID: number }>>({
+      url: `${root}/jobs/${jobId}/delete-draft`,
+      method: 'POST',
+      data: { rowVersion }
     }),
   upload: (jobId: number, rowVersion: number, categoryId: number, entryStatusCode: string | null, file: File) => {
     const form = new FormData()
@@ -67,41 +72,51 @@ export const MergePdfServices = {
   updatePageCategory: (jobId: number, pageId: number, rowVersion: number, categoryId: number) =>
     axiosRequest<ResultDataResponseI<MergePdfDetail>>({
       url: `${root}/jobs/${jobId}/pages/${pageId}/category`,
-      method: 'PATCH',
+      method: 'POST',
       data: { rowVersion, categoryId }
     }),
   rotatePage: (jobId: number, pageId: number, rowVersion: number, delta: 90 | 270) =>
     axiosRequest<ResultDataResponseI<MergePdfDetail>>({
       url: `${root}/jobs/${jobId}/pages/${pageId}/rotation`,
-      method: 'PATCH',
+      method: 'POST',
       data: { rowVersion, delta }
     }),
   removePage: (jobId: number, pageId: number, rowVersion: number) =>
     axiosRequest<ResultDataResponseI<MergePdfDetail>>({
-      url: `${root}/jobs/${jobId}/pages/${pageId}`,
-      method: 'DELETE',
+      url: `${root}/jobs/${jobId}/pages/${pageId}/remove`,
+      method: 'POST',
       data: { rowVersion }
     }),
-  pagePreviewUrl: (jobId: number, pageId: number, rotationDegrees: number) =>
-    `${directRoot}/jobs/${jobId}/pages/${pageId}/preview?rotation=${rotationDegrees}`,
-  pageThumbnailUrl: (jobId: number, pageId: number, rotationDegrees: number) =>
-    `${directRoot}/jobs/${jobId}/pages/${pageId}/thumbnail?rotation=${rotationDegrees}`,
+  pagePreview: (jobId: number, pageId: number, signal?: AbortSignal) =>
+    axiosRequest<Blob>({
+      url: `${root}/jobs/${jobId}/pages/${pageId}/preview`,
+      method: 'POST',
+      responseType: 'blob',
+      signal
+    }),
+  pageThumbnail: (jobId: number, pageId: number, signal?: AbortSignal) =>
+    axiosRequest<Blob>({
+      url: `${root}/jobs/${jobId}/pages/${pageId}/thumbnail`,
+      method: 'POST',
+      responseType: 'blob',
+      signal
+    }),
   removeDocument: (jobId: number, documentId: number, rowVersion: number) =>
     axiosRequest<ResultDataResponseI<MergePdfDetail>>({
-      url: `${root}/jobs/${jobId}/documents/${documentId}`,
-      method: 'DELETE',
+      url: `${root}/jobs/${jobId}/documents/${documentId}/remove`,
+      method: 'POST',
       data: { rowVersion }
     }),
   updateEntryStatus: (jobId: number, documentId: number, rowVersion: number, statusCode: string | null) =>
     axiosRequest<ResultDataResponseI<MergePdfDetail>>({
       url: `${root}/jobs/${jobId}/documents/${documentId}/status`,
-      method: 'PATCH',
+      method: 'POST',
       data: { rowVersion, statusCode }
     }),
   reorder: (jobId: number, rowVersion: number, pageIds: number[]) =>
     axiosRequest<ResultDataResponseI<MergePdfDetail>>({
-      url: `${root}/jobs/${jobId}/pages`,
-      method: 'PUT',
+      url: `${root}/jobs/${jobId}/pages/reorder`,
+      method: 'POST',
       data: { rowVersion, pageIds }
     }),
   complete: (jobId: number, rowVersion: number) =>
@@ -113,13 +128,13 @@ export const MergePdfServices = {
   preview: (documentId: number) =>
     axiosRequest<Blob>({
       url: `${root}/documents/${documentId}/preview`,
-      method: 'GET',
+      method: 'POST',
       responseType: 'blob'
     }),
   download: (jobId: number, publicationId: number) =>
     axiosRequest<Blob>({
       url: `${root}/jobs/${jobId}/publications/${publicationId}/pdf`,
-      method: 'GET',
+      method: 'POST',
       responseType: 'blob'
     })
 }

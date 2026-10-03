@@ -24,21 +24,22 @@ import type { MergePdfJob } from '@/_workspace/types/merge-pdf/MergePdf'
 import ActionsMenu from '@/libs/material-react-table/components/ActionsMenu'
 
 import { MENU_ID } from './env'
-import MergePdfAddModal from './MergePdfAddModal'
+import MergePdfDeleteModal from './MergePdfDeleteModal'
 import MergePdfViewModal from './MergePdfViewModal'
 import type { MergePdfListValues } from './validationSchema'
 
 interface Props {
   onOpen: (jobId: number) => void
+  onAdd: () => void
+  refreshVersion: number
 }
 
-const MergePdfSearchResult = ({ onOpen }: Props) => {
+const MergePdfSearchResult = ({ onOpen, onAdd, refreshVersion }: Props) => {
   const { isEnableFetching, setIsEnableFetching, pagination, setPagination } = useDxContext()
   const { getValues, setValue } = useFormContext<MergePdfListValues>()
   const checkPermission = useCheckPermission()
-  const [openAdd, setOpenAdd] = useState(false)
   const [openView, setOpenView] = useState(false)
-  const [, setOpenDelete] = useState(false)
+  const [openDelete, setOpenDelete] = useState(false)
   const [rowSelected, setRowSelected] = useState<MRT_Row<MergePdfJob> | null>(null)
   const [columnVisibility, setColumnVisibility] = useState<MRT_VisibilityState>(
     getValues('searchResults.columnVisibility')
@@ -84,6 +85,7 @@ const MergePdfSearchResult = ({ onOpen }: Props) => {
     if (!jobs.isFetching) setIsEnableFetching(false)
   }, [jobs.isFetching, setIsEnableFetching])
   useUpdateEffect(() => setIsEnableFetching(true), [JSON.stringify([columnFilters, sorting, pagination])])
+  useUpdateEffect(() => setIsEnableFetching(true), [refreshVersion])
   useEffect(() => {
     setValue('searchResults.columnFilters', columnFilters)
     setValue('searchResults.sorting', sorting)
@@ -157,7 +159,7 @@ const MergePdfSearchResult = ({ onOpen }: Props) => {
               color='success'
               className='rounded-3xl'
               onClick={() => {
-                if (checkPermission(Number(import.meta.env.VITE_APPLICATION_ID), MENU_ID, 'IS_CREATE')) setOpenAdd(true)
+                if (checkPermission(Number(import.meta.env.VITE_APPLICATION_ID), MENU_ID, 'IS_CREATE')) onAdd()
               }}
             >
               Add New
@@ -213,7 +215,7 @@ const MergePdfSearchResult = ({ onOpen }: Props) => {
                 setOpenModalDelete={setOpenDelete}
                 MENU_ID={MENU_ID}
                 isNeedViewEyeIcon
-                isNeedDelete={false}
+                isNeedDelete={row.original.STATUS === 'DRAFT'}
                 handleClickOpenModalView={selected => {
                   setRowSelected(selected)
                   setOpenView(true)
@@ -224,13 +226,16 @@ const MergePdfSearchResult = ({ onOpen }: Props) => {
           isError={jobs.isError}
         />
       </Card>
-      {openAdd && (
-        <MergePdfAddModal
-          open={openAdd}
-          onClose={() => setOpenAdd(false)}
-          onCreated={detail => {
-            setOpenAdd(false)
-            onOpen(detail.job.JOB_ID)
+      {openDelete && rowSelected && (
+        <MergePdfDeleteModal
+          job={rowSelected.original}
+          onClose={() => {
+            setOpenDelete(false)
+            setRowSelected(null)
+          }}
+          onDeleted={() => {
+            setPagination(previous => ({ ...previous, pageIndex: 0 }))
+            setIsEnableFetching(true)
           }}
         />
       )}

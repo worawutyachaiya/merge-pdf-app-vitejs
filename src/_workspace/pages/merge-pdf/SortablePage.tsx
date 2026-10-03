@@ -2,10 +2,11 @@ import { useEffect, useRef, useState } from 'react'
 
 import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import { Box, IconButton, Typography } from '@mui/material'
+import { Box, Checkbox, IconButton, Typography } from '@mui/material'
 
-import { MergePdfServices } from '@/_workspace/services/merge-pdf/MergePdfServices'
 import { MERGE_PDF_CATEGORIES, type MergePdfDocument, type MergePdfPage } from '@/_workspace/types/merge-pdf/MergePdf'
+
+import MergePdfPageThumbnail from './MergePdfPageThumbnail'
 
 interface Props {
   jobId: number
@@ -16,11 +17,23 @@ interface Props {
   onSelect: () => void
   onRotate: (delta: 90 | 270) => void
   onRemove: () => void
+  checked: boolean
+  onCheck: (checked: boolean) => void
 }
 
-const SortablePage = ({ jobId, page, document, selected, disabled, onSelect, onRotate, onRemove }: Props) => {
+const SortablePage = ({
+  jobId,
+  page,
+  document,
+  selected,
+  disabled,
+  onSelect,
+  onRotate,
+  onRemove,
+  checked,
+  onCheck
+}: Props) => {
   const [visible, setVisible] = useState(false)
-  const [failedThumbnailUrl, setFailedThumbnailUrl] = useState<string | null>(null)
   const cardRef = useRef<HTMLDivElement | null>(null)
   const category = MERGE_PDF_CATEGORIES.find(item => item.id === page.CATEGORY_ID)
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
@@ -38,10 +51,9 @@ const SortablePage = ({ jobId, page, document, selected, disabled, onSelect, onR
     return () => observer.disconnect()
   }, [])
 
-  const thumbnailUrl = MergePdfServices.pageThumbnailUrl(jobId, page.PAGE_ID, page.ROTATION_DEGREES)
-
   return (
     <Box
+      id={`merge-pdf-page-${page.PAGE_ID}`}
       ref={node => {
         setNodeRef(node as HTMLElement | null)
         cardRef.current = node as HTMLDivElement | null
@@ -53,7 +65,7 @@ const SortablePage = ({ jobId, page, document, selected, disabled, onSelect, onR
         position: 'relative',
         bgcolor: 'background.paper',
         border: '1px solid',
-        borderColor: selected ? 'primary.main' : 'divider',
+        borderColor: selected || checked ? 'primary.main' : 'divider',
         borderRadius: 1,
         overflow: 'hidden',
         boxShadow: isDragging ? 6 : 1,
@@ -61,6 +73,14 @@ const SortablePage = ({ jobId, page, document, selected, disabled, onSelect, onR
       }}
     >
       <Box sx={{ display: 'flex', justifyContent: 'space-between', p: 1, gap: 0.5 }}>
+        <Checkbox
+          size='small'
+          checked={checked}
+          disabled={disabled}
+          onChange={(_, value) => onCheck(value)}
+          inputProps={{ 'aria-label': `Select page ${page.SORT_ORDER}` }}
+          sx={{ p: 0.5 }}
+        />
         <IconButton
           size='small'
           aria-label={`Drag page ${page.SORT_ORDER}`}
@@ -128,19 +148,13 @@ const SortablePage = ({ jobId, page, document, selected, disabled, onSelect, onR
             justifyContent: 'center'
           }}
         >
-          {visible && failedThumbnailUrl !== thumbnailUrl ? (
-            <Box
-              component='img'
-              key={`${page.PAGE_ID}-${page.ROTATION_DEGREES}`}
-              alt={`Page ${page.SORT_ORDER} preview`}
-              src={thumbnailUrl}
-              loading='lazy'
-              onError={() => setFailedThumbnailUrl(thumbnailUrl)}
-              sx={{ width: '100%', height: '100%', objectFit: 'contain', pointerEvents: 'none' }}
-            />
-          ) : (
-            <i className='tabler-file-type-pdf text-4xl' />
-          )}
+          <MergePdfPageThumbnail
+            jobId={jobId}
+            pageId={page.PAGE_ID}
+            rotation={page.ROTATION_DEGREES}
+            enabled={visible}
+            label={`Page ${page.SORT_ORDER} preview`}
+          />
         </Box>
         <Typography variant='body2' sx={{ mt: 1 }} noWrap>
           {page.SORT_ORDER}.{' '}

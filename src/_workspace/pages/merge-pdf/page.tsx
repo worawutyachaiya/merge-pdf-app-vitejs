@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react'
 import {
   DndContext,
+  DragOverlay,
   KeyboardSensor,
   PointerSensor,
   closestCenter,
@@ -18,12 +19,12 @@ import {
   Card,
   CardContent,
   CardHeader,
+  CircularProgress,
   Dialog,
   DialogActions,
   DialogContent,
   DialogTitle,
   Grid,
-  Pagination,
   Tab,
   Stack,
   Tabs,
@@ -32,7 +33,11 @@ import {
 import { useForm } from 'react-hook-form'
 
 import DxBreadCrumbs from '@/_template/DxBreadCrumbs'
-import { useMergePdfActions, useMergePdfDetail } from '@/_workspace/react-query/hooks/useMergePdf'
+import {
+  useMergePdfActions,
+  useMergePdfDetail,
+  useMergePdfPagePreview
+} from '@/_workspace/react-query/hooks/useMergePdf'
 import { MergePdfServices } from '@/_workspace/services/merge-pdf/MergePdfServices'
 import {
   MERGE_PDF_CATEGORIES,
@@ -42,11 +47,15 @@ import {
 import { ToastMessageError, ToastMessageSuccess } from '@/components/ToastMessage'
 import CustomTextField from '@/components/mui/TextField'
 import SelectCustom from '@/components/react-select/SelectCustom'
+import ConfirmModal from '@/components/ConfirmModal'
 
 import SortablePage from './SortablePage'
 import MergePdfList from './MergePdfList'
+import MergePdfPageThumbnail from './MergePdfPageThumbnail'
 import { breadcrumbNavigation, MENU_NAME } from './env'
 import { mergePdfFormDefaults, mergePdfFormSchema, type MergePdfFormValues } from './validationSchema'
+import { movePagesToPosition } from './pageOrder'
+import { useObjectUrl } from './useObjectUrl'
 
 const firstDetail = (response: {
   data: { Status: boolean; Message: string; ResultOnDb: MergePdfDetail[] }
@@ -69,6 +78,9 @@ type Confirmation = { kind: 'complete' } | { kind: 'document'; id: number } | { 
 
 const MergePdfPage = () => {
   const [selectedJobId, setSelectedJobId] = useState<number | null>(null)
+  const [editorMode, setEditorMode] = useState<'Add' | 'Edit' | null>(null)
+  const [refreshVersion, setRefreshVersion] = useState(0)
+  const [createConfirmOpen, setCreateConfirmOpen] = useState(false)
   const [selectedPageId, setSelectedPageId] = useState<number | null>(null)
   const [categoryId, setCategoryId] = useState(1)
   const [importMode, setImportMode] = useState<'manual' | 'combined'>('manual')
@@ -77,14 +89,25 @@ const MergePdfPage = () => {
   const [confirmAction, setConfirmAction] = useState<Confirmation>(null)
   const [previewOpen, setPreviewOpen] = useState(false)
   const [statusEditId, setStatusEditId] = useState<number | null>(null)
-  const [pageBatch, setPageBatch] = useState(1)
   const [movePosition, setMovePosition] = useState('')
+  const [checkedPageIds, setCheckedPageIds] = useState<number[]>([])
+  const [bulkPosition, setBulkPosition] = useState('')
+  const [jumpPosition, setJumpPosition] = useState('')
+  const [draggedPageId, setDraggedPageId] = useState<number | null>(null)
   const lastSyncedJobId = useRef<number | null>(null)
+  const listScrollPosition = useRef(0)
   const detailQuery = useMergePdfDetail(selectedJobId)
   const actions = useMergePdfActions()
   const detail = detailQuery.data?.data.ResultOnDb[0]
   const selectedPage = detail?.pages.find(page => page.PAGE_ID === selectedPageId) ?? detail?.pages[0]
   const selectedPageIndex = detail?.pages.findIndex(page => page.PAGE_ID === selectedPage?.PAGE_ID) ?? -1
+  const previewQuery = useMergePdfPagePreview(
+    detail?.job.JOB_ID ?? null,
+    selectedPage?.PAGE_ID ?? null,
+    selectedPage?.ROTATION_DEGREES ?? 0,
+    previewOpen
+  )
+  const previewUrl = useObjectUrl(previewOpen ? previewQuery.data : undefined)
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
     useSensor(KeyboardSensor, {
@@ -123,13 +146,8 @@ const MergePdfPage = () => {
       .filter(document => importEntryDocumentIds.has(document.DOCUMENT_ID))
       .every(document => document.ENTRY_STATUS_CODE === '04')
   const unknownPageCount = detail?.pages.filter(page => page.CLASSIFICATION_SOURCE === 'UNKNOWN').length ?? 0
-  const batchSize = 24
-  const batchCount = Math.max(1, Math.ceil((detail?.pages.length ?? 0) / batchSize))
-  const visiblePages =
-    detail?.pages.slice(
-      (Math.min(pageBatch, batchCount) - 1) * batchSize,
-      Math.min(pageBatch, batchCount) * batchSize
-    ) ?? []
+  const activeCheckedIds = checkedPageIds.filter(id => detail?.pages.some(page => page.PAGE_ID === id))
+  const maxBulkPosition = (detail?.pages.length ?? 0) - activeCheckedIds.length + 1
   const categoryOptions = MERGE_PDF_CATEGORIES.map(category => ({ value: category.id, label: category.name }))
 
   const run = async (action: () => Promise<void>, success?: string) => {
@@ -144,11 +162,46 @@ const MergePdfPage = () => {
     }
   }
 
+  const closeEditor = () => {
+    setEditorMode(null)
+    setSelectedJobId(null)
+    setPreviewOpen(false)
+    setRefreshVersion(value => value + 1)
+    window.requestAnimationFrame(() => window.scrollTo({ top: listScrollPosition.current }))
+  }
+
+  const startEditor = (jobId: number | null) => {
+    listScrollPosition.current = window.scrollY
+    reset(mergePdfFormDefaults)
+    lastSyncedJobId.current = null
+    setSelectedJobId(jobId)
+    setEditorMode(jobId === null ? 'Add' : 'Edit')
+    setSelectedPageId(null)
+    setCheckedPageIds([])
+    setBulkPosition('')
+    setJumpPosition('')
+    setMovePosition('')
+    setCategoryId(1)
+    setImportMode('manual')
+    setFiles([])
+    setPreviewOpen(false)
+    window.requestAnimationFrame(() => window.scrollTo({ top: 0 }))
+  }
+
+  const createDraft = () =>
+    run(async () => {
+      const values = mergePdfFormSchema.parse(getValues())
+      const created = firstDetail(await actions.create.mutateAsync({ title: values.title, reference: null }))
+      reset(values)
+      setSelectedJobId(created.job.JOB_ID)
+      setCreateConfirmOpen(false)
+    }, 'Draft created')
+
   const saveDraft = handleSubmit(values =>
     run(async () => {
       if (!detail) return
       if (!isDirty) {
-        setSelectedJobId(null)
+        closeEditor()
         return
       }
       firstDetail(
@@ -160,9 +213,15 @@ const MergePdfPage = () => {
         })
       )
       reset(values)
-      setSelectedJobId(null)
+      closeEditor()
     }, 'Draft saved')
   )
+
+  const returnToResults = () => {
+    if (busy) return
+    if (detail && isDirty) void saveDraft()
+    else closeEditor()
+  }
 
   const importFiles = () =>
     run(
@@ -241,9 +300,11 @@ const MergePdfPage = () => {
     if (!detail || !selectedPage) return
     const position = Number(movePosition)
     if (!Number.isInteger(position) || position < 1 || position > detail.pages.length) return
-    const ids = detail.pages.map(page => page.PAGE_ID)
-    const oldIndex = ids.indexOf(selectedPage.PAGE_ID)
-    ids.splice(position - 1, 0, ids.splice(oldIndex, 1)[0])
+    const ids = movePagesToPosition(
+      detail.pages.map(page => page.PAGE_ID),
+      [selectedPage.PAGE_ID],
+      position
+    )
     void run(async () => {
       firstDetail(
         await actions.reorder.mutateAsync({
@@ -252,12 +313,39 @@ const MergePdfPage = () => {
           pageIds: ids
         })
       )
-      setPageBatch(Math.ceil(position / batchSize))
       setMovePosition('')
     }, 'Page order saved')
   }
 
+  const moveCheckedPages = () => {
+    if (!detail || !activeCheckedIds.length) return
+    const position = Number(bulkPosition)
+    if (!Number.isInteger(position) || position < 1 || position > maxBulkPosition) return
+    const ids = movePagesToPosition(
+      detail.pages.map(page => page.PAGE_ID),
+      activeCheckedIds,
+      position
+    )
+    void run(async () => {
+      firstDetail(
+        await actions.reorder.mutateAsync({
+          jobId: detail.job.JOB_ID,
+          rowVersion: detail.job.ROW_VERSION,
+          pageIds: ids
+        })
+      )
+      setCheckedPageIds([])
+      setBulkPosition('')
+      window.requestAnimationFrame(() =>
+        document
+          .getElementById(`merge-pdf-page-${ids[position - 1]}`)
+          ?.scrollIntoView({ block: 'center', behavior: 'smooth' })
+      )
+    }, 'Selected pages moved')
+  }
+
   const onDragEnd = (event: DragEndEvent) => {
+    setDraggedPageId(null)
     if (!detail || !event.over || event.active.id === event.over.id) return
     const ids = detail.pages.map(page => page.PAGE_ID)
     const oldIndex = ids.indexOf(Number(event.active.id))
@@ -292,7 +380,7 @@ const MergePdfPage = () => {
           firstDetail(
             await actions.complete.mutateAsync({ jobId: detail.job.JOB_ID, rowVersion: saved.job.ROW_VERSION })
           )
-          setSelectedJobId(null)
+          closeEditor()
         } else if (confirmAction.kind === 'document') {
           firstDetail(
             await actions.remove.mutateAsync({
@@ -355,42 +443,34 @@ const MergePdfPage = () => {
       <Grid size={12} sx={{ display: 'flex', alignItems: 'center' }}>
         <DxBreadCrumbs menuName={MENU_NAME} breadcrumbNavigation={breadcrumbNavigation} />
       </Grid>
-      {selectedJobId === null && (
+      <Grid size={12} sx={{ display: editorMode === null ? 'block' : 'none' }}>
+        <MergePdfList
+          onOpen={jobId => startEditor(jobId)}
+          onAdd={() => startEditor(null)}
+          refreshVersion={refreshVersion}
+        />
+      </Grid>
+      {editorMode !== null && (
         <Grid size={12}>
-          <MergePdfList
-            onOpen={jobId => {
-              setSelectedJobId(jobId)
-              setSelectedPageId(null)
-              setPageBatch(1)
-              setPreviewOpen(false)
-            }}
-          />
-        </Grid>
-      )}
-      {selectedJobId !== null && (
-        <Grid size={12}>
+          <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 4, mb: 6 }}>
+            <Button
+              variant='tonal'
+              color='secondary'
+              startIcon={<i className='tabler-arrow-left' />}
+              disabled={busy}
+              onClick={returnToResults}
+            >
+              Back to results
+            </Button>
+            <Typography variant='h5'>
+              {editorMode} Merge PDF{detail ? ` · ${detail.job.JOB_TITLE}` : ''}
+            </Typography>
+          </Box>
           <Stack spacing={6}>
             <Card>
               <CardHeader
-                title={detail?.job.JOB_TITLE ?? 'Loading...'}
+                title={detail?.job.JOB_TITLE ?? (editorMode === 'Add' ? 'New document' : 'Loading...')}
                 titleTypographyProps={{ variant: 'h5' }}
-                action={
-                  <Button
-                    variant='tonal'
-                    color='secondary'
-                    disabled={busy}
-                    onClick={() => {
-                      if (detail && isDirty) {
-                        void saveDraft()
-                      } else {
-                        setSelectedJobId(null)
-                        setPreviewOpen(false)
-                      }
-                    }}
-                  >
-                    Back to results
-                  </Button>
-                }
               />
               <CardContent>
                 <Grid container spacing={4}>
@@ -405,6 +485,13 @@ const MergePdfPage = () => {
                       helperText={errors.title?.message}
                     />
                   </Grid>
+                  {!detail && editorMode === 'Add' && (
+                    <Grid size={12}>
+                      <Typography color='text.secondary'>
+                        Enter a document name and create a draft to start importing and arranging pages.
+                      </Typography>
+                    </Grid>
+                  )}
                   {detail && (
                     <Grid size={12}>
                       <Alert severity='info'>
@@ -504,10 +591,10 @@ const MergePdfPage = () => {
                     type when needed.
                   </Alert>
                 )}
-                <Card>
+                <Card sx={{ overflow: 'visible' }}>
                   <CardHeader
                     title={`Pages (${detail.pages.length})`}
-                    subheader='Drag within this group. Open a page to move it to any position, rotate it or remove it.'
+                    subheader='Drag to any page; move near the edge to scroll. Select pages to move a group to a position.'
                     titleTypographyProps={{ variant: 'h5' }}
                     action={
                       <Button
@@ -522,37 +609,95 @@ const MergePdfPage = () => {
                     }
                   />
                   <CardContent>
-                    {detail.pages.length > batchSize && (
-                      <Box
-                        sx={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'space-between',
-                          gap: 2,
-                          flexWrap: 'wrap',
-                          mb: 3
+                    <Box
+                      sx={{
+                        display: 'flex',
+                        flexWrap: 'wrap',
+                        alignItems: 'flex-end',
+                        gap: 3,
+                        mb: 4,
+                        position: 'sticky',
+                        top: 80,
+                        bgcolor: 'background.paper',
+                        zIndex: 2,
+                        py: 2
+                      }}
+                    >
+                      <CustomTextField
+                        type='number'
+                        label={`Go to page (1–${detail.pages.length})`}
+                        placeholder='Enter ...'
+                        value={jumpPosition}
+                        onChange={event => setJumpPosition(event.target.value)}
+                        sx={{ width: 190 }}
+                      />
+                      <Button
+                        variant='tonal'
+                        disabled={
+                          busy ||
+                          !Number.isInteger(Number(jumpPosition)) ||
+                          Number(jumpPosition) < 1 ||
+                          Number(jumpPosition) > detail.pages.length
+                        }
+                        onClick={() => {
+                          const target = detail.pages[Number(jumpPosition) - 1]
+                          if (target)
+                            document
+                              .getElementById(`merge-pdf-page-${target.PAGE_ID}`)
+                              ?.scrollIntoView({ behavior: 'smooth', block: 'center' })
                         }}
                       >
-                        <Typography variant='body2'>
-                          Showing {(Math.min(pageBatch, batchCount) - 1) * batchSize + 1}–
-                          {Math.min(Math.min(pageBatch, batchCount) * batchSize, detail.pages.length)} of{' '}
-                          {detail.pages.length} pages
-                        </Typography>
-                        <Pagination
-                          count={batchCount}
-                          page={Math.min(pageBatch, batchCount)}
-                          onChange={(_, value) => setPageBatch(value)}
-                          color='primary'
-                          shape='rounded'
-                        />
-                      </Box>
+                        Go
+                      </Button>
+                      <Typography sx={{ alignSelf: 'center' }}>{activeCheckedIds.length} selected</Typography>
+                      <CustomTextField
+                        type='number'
+                        label={`Move selected to position (1–${maxBulkPosition})`}
+                        placeholder='Enter ...'
+                        value={bulkPosition}
+                        onChange={event => setBulkPosition(event.target.value)}
+                        disabled={!activeCheckedIds.length || busy}
+                        sx={{ width: 240 }}
+                      />
+                      <Button
+                        variant='contained'
+                        disabled={
+                          busy ||
+                          !activeCheckedIds.length ||
+                          !Number.isInteger(Number(bulkPosition)) ||
+                          Number(bulkPosition) < 1 ||
+                          Number(bulkPosition) > maxBulkPosition
+                        }
+                        onClick={moveCheckedPages}
+                      >
+                        Move selected
+                      </Button>
+                      <Button
+                        variant='tonal'
+                        color='secondary'
+                        disabled={busy || !activeCheckedIds.length}
+                        onClick={() => setCheckedPageIds([])}
+                      >
+                        Clear selection
+                      </Button>
+                    </Box>
+                    {activeCheckedIds.length > 1 && (
+                      <Typography variant='body2' color='text.secondary' sx={{ mb: 3 }}>
+                        The destination is the first page of the moved group. Selected pages keep their current order.
+                      </Typography>
                     )}
-                    <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
-                      <SortableContext items={visiblePages.map(page => page.PAGE_ID)} strategy={rectSortingStrategy}>
+                    <DndContext
+                      sensors={sensors}
+                      collisionDetection={closestCenter}
+                      onDragStart={event => setDraggedPageId(Number(event.active.id))}
+                      onDragCancel={() => setDraggedPageId(null)}
+                      onDragEnd={onDragEnd}
+                    >
+                      <SortableContext items={detail.pages.map(page => page.PAGE_ID)} strategy={rectSortingStrategy}>
                         <Box
                           sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(185px, 1fr))', gap: 3 }}
                         >
-                          {visiblePages.map(page => (
+                          {detail.pages.map(page => (
                             <SortablePage
                               key={page.PAGE_ID}
                               jobId={detail.job.JOB_ID}
@@ -560,6 +705,12 @@ const MergePdfPage = () => {
                               document={documentsById.get(page.DOCUMENT_ID)}
                               selected={previewOpen && page.PAGE_ID === selectedPage?.PAGE_ID}
                               disabled={busy}
+                              checked={activeCheckedIds.includes(page.PAGE_ID)}
+                              onCheck={checked =>
+                                setCheckedPageIds(ids =>
+                                  checked ? [...ids, page.PAGE_ID] : ids.filter(id => id !== page.PAGE_ID)
+                                )
+                              }
                               onSelect={() => {
                                 setSelectedPageId(page.PAGE_ID)
                                 setPreviewOpen(true)
@@ -570,19 +721,27 @@ const MergePdfPage = () => {
                           ))}
                         </Box>
                       </SortableContext>
+                      <DragOverlay>
+                        {draggedPageId !== null && (
+                          <Box sx={{ width: 185, p: 3, bgcolor: 'background.paper', boxShadow: 8, borderRadius: 1 }}>
+                            <Box sx={{ height: 195, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                              <MergePdfPageThumbnail
+                                jobId={detail.job.JOB_ID}
+                                pageId={draggedPageId}
+                                rotation={
+                                  detail.pages.find(page => page.PAGE_ID === draggedPageId)?.ROTATION_DEGREES ?? 0
+                                }
+                                label='Moving page'
+                              />
+                            </Box>
+                            <Typography>
+                              Moving page {detail.pages.find(page => page.PAGE_ID === draggedPageId)?.SORT_ORDER}
+                            </Typography>
+                          </Box>
+                        )}
+                      </DragOverlay>
                     </DndContext>
                     {detail.pages.length === 0 && <Typography>No pages yet</Typography>}
-                    {detail.pages.length > batchSize && (
-                      <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 3 }}>
-                        <Pagination
-                          count={batchCount}
-                          page={Math.min(pageBatch, batchCount)}
-                          onChange={(_, value) => setPageBatch(value)}
-                          color='primary'
-                          shape='rounded'
-                        />
-                      </Box>
-                    )}
                   </CardContent>
                 </Card>
                 <Card>
@@ -643,37 +802,76 @@ const MergePdfPage = () => {
                     </Stack>
                   </CardContent>
                 </Card>
-                <Card>
-                  <CardContent>
-                    <Stack spacing={3}>
-                      <Typography variant='body2' color='text.secondary'>
-                        File and page changes are already saved. Save Draft &amp; Close saves the document name and
-                        returns to search results.
-                      </Typography>
-                      <Box className='flex flex-wrap gap-3'>
-                        <Button variant='contained' color='primary' disabled={busy} onClick={saveDraft}>
-                          Save Draft &amp; Close
-                        </Button>
-                        <Button
-                          variant='contained'
-                          color='success'
-                          disabled={busy || !canComplete}
-                          onClick={() => setConfirmAction({ kind: 'complete' })}
-                        >
-                          Save &amp; Complete
-                        </Button>
-                      </Box>
-                    </Stack>
-                  </CardContent>
-                </Card>
               </>
             )}
             {selectedJobId !== null && detailQuery.isError && (
               <Alert severity='error'>Could not load this document.</Alert>
             )}
           </Stack>
+          <Box
+            sx={{
+              display: 'flex',
+              alignItems: 'center',
+              position: 'sticky',
+              bottom: 0,
+              zIndex: 5,
+              bgcolor: 'background.paper',
+              boxShadow: 3,
+              borderRadius: 1,
+              mt: 6,
+              p: 3,
+              flexWrap: 'wrap',
+              gap: 2
+            }}
+          >
+            {detail ? (
+              <>
+                <Typography variant='body2' sx={{ mr: 'auto' }}>
+                  {detail.pages.length} pages · File and page changes save automatically
+                </Typography>
+                <Button variant='contained' disabled={busy} onClick={saveDraft}>
+                  Save Draft &amp; Return
+                </Button>
+                <Button
+                  variant='contained'
+                  color='success'
+                  disabled={busy || !canComplete}
+                  onClick={() => setConfirmAction({ kind: 'complete' })}
+                >
+                  Save &amp; Complete
+                </Button>
+              </>
+            ) : (
+              editorMode === 'Add' && (
+                <Button
+                  variant='contained'
+                  color='success'
+                  disabled={busy}
+                  onClick={handleSubmit(() => setCreateConfirmOpen(true))}
+                >
+                  Create Draft &amp; Continue
+                </Button>
+              )
+            )}
+            <Button
+              variant='tonal'
+              color='secondary'
+              disabled={busy}
+              startIcon={<i className='tabler-arrow-left' />}
+              onClick={returnToResults}
+            >
+              Back to results
+            </Button>
+          </Box>
         </Grid>
       )}
+      <ConfirmModal
+        show={createConfirmOpen}
+        onConfirmClick={() => void createDraft()}
+        onCloseClick={() => setCreateConfirmOpen(false)}
+        isDelete={false}
+        isLoading={busy}
+      />
       <Dialog open={previewOpen && !!selectedPage} onClose={() => setPreviewOpen(false)} fullWidth maxWidth='lg'>
         <DialogTitle>
           {selectedPage
@@ -684,13 +882,32 @@ const MergePdfPage = () => {
           {selectedPage && detail && (
             <Grid container spacing={4}>
               <Grid size={{ xs: 12, md: 8 }}>
-                <Box
-                  component='iframe'
-                  key={`${selectedPage.PAGE_ID}-${selectedPage.ROTATION_DEGREES}`}
-                  title={`Preview page ${selectedPage.SORT_ORDER}`}
-                  src={`${MergePdfServices.pagePreviewUrl(detail.job.JOB_ID, selectedPage.PAGE_ID, selectedPage.ROTATION_DEGREES)}#toolbar=0&navpanes=0&view=Fit`}
-                  sx={{ width: '100%', height: 'min(72vh, 720px)', border: '1px solid', borderColor: 'divider' }}
-                />
+                {previewQuery.isError ? (
+                  <Alert
+                    severity='error'
+                    action={
+                      <Button color='inherit' size='small' onClick={() => void previewQuery.refetch()}>
+                        Retry
+                      </Button>
+                    }
+                  >
+                    Could not load this page preview.
+                  </Alert>
+                ) : previewUrl ? (
+                  <Box
+                    component='iframe'
+                    key={`${selectedPage.PAGE_ID}-${selectedPage.ROTATION_DEGREES}`}
+                    title={`Preview page ${selectedPage.SORT_ORDER}`}
+                    src={`${previewUrl}#toolbar=0&navpanes=0&view=Fit`}
+                    sx={{ width: '100%', height: 'min(72vh, 720px)', border: '1px solid', borderColor: 'divider' }}
+                  />
+                ) : (
+                  <Box
+                    sx={{ height: 'min(72vh, 720px)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                  >
+                    <CircularProgress aria-label='Loading page preview' />
+                  </Box>
+                )}
               </Grid>
               <Grid size={{ xs: 12, md: 4 }}>
                 <Stack spacing={4}>
@@ -782,7 +999,6 @@ const MergePdfPage = () => {
             disabled={busy || selectedPageIndex <= 0}
             onClick={() => {
               setSelectedPageId(detail?.pages[selectedPageIndex - 1]?.PAGE_ID ?? null)
-              setPageBatch(Math.ceil(selectedPageIndex / batchSize))
             }}
           >
             Previous
@@ -793,7 +1009,6 @@ const MergePdfPage = () => {
             disabled={busy || !detail || selectedPageIndex >= detail.pages.length - 1}
             onClick={() => {
               setSelectedPageId(detail?.pages[selectedPageIndex + 1]?.PAGE_ID ?? null)
-              setPageBatch(Math.ceil((selectedPageIndex + 2) / batchSize))
             }}
           >
             Next
