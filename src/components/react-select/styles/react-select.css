@@ -1,0 +1,164 @@
+@import 'tailwindcss';
+
+/* =========================
+   COMPONENTS
+========================= */
+
+@layer components {
+  .custom-select .select__control {
+    border: 1px solid var(--mui-palette-customColors-inputBorder) !important;
+    background: none !important;
+  }
+
+  .custom-select .select__control.select__control--is-disabled {
+    border-color: transparent !important;
+    background-color: var(--mui-palette-action-hover) !important;
+  }
+
+  .custom-select .select__control .select__placeholder {
+    transition: padding-left 200ms cubic-bezier(0, 0, 0.2, 1) 0ms;
+    font-weight: 400;
+    opacity: 0.35;
+    font-size: 0.9375rem;
+    color: var(--mui-palette-text-primary) !important;
+  }
+
+  .custom-select .select__input-container {
+    color: var(--mui-palette-text-primary) !important;
+  }
+
+  .custom-select .select__input-container input {
+    color: var(--mui-palette-text-primary) !important;
+  }
+
+  .custom-select .select__control--is-focused {
+    border: 1px solid var(--mui-palette-primary-main) !important;
+    border-color: var(--mui-palette-primary-main) !important;
+    box-shadow: var(--mui-palette-primary-main) !important;
+  }
+
+  .custom-select .select__control--is-focused .select__placeholder {
+    padding-left: 4px;
+  }
+
+  .custom-select .select__indicator-separator {
+    border: 1px solid var(--mui-palette-customColors-inputBorder);
+    background: none !important;
+  }
+
+  .custom-select .select__single-value {
+    color: var(--mui-palette-text-primary) !important;
+  }
+
+  .custom-select .select__single-value.select__single-value--is-disabled {
+    color: var(--mui-palette-text-primary) !important;
+  }
+
+  .custom-select .select__multi-value {
+    background-color: var(--mui-palette-action-selected) !important;
+  }
+
+  .custom-select .select__multi-value__label {
+    color: var(--mui-palette-text-primary) !important;
+  }
+
+  .custom-select .select__multi-value__remove {
+    color: var(--mui-palette-text-secondary) !important;
+  }
+
+  .custom-select .select__multi-value__remove:hover {
+    background-color: var(--mui-palette-error-lightOpacity) !important;
+    color: var(--mui-palette-error-main) !important;
+  }
+
+  .custom-select--compact-multi .select__value-container--is-multi {
+    flex-wrap: nowrap !important;
+    overflow: hidden;
+  }
+
+  .custom-select--compact-multi .select__multi-value {
+    flex: 0 0 auto;
+    max-width: 45%;
+  }
+
+  .custom-select--compact-multi .select__multi-value__label {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .custom-select-multi-overflow {
+    flex: 0 0 auto;
+    padding: 2px 6px;
+    border-radius: 2px;
+    background-color: var(--mui-palette-action-hover);
+    color: var(--mui-palette-text-secondary);
+    line-height: 1.5;
+  }
+
+  .select__menu-portal {
+    z-index: 999999 !important;
+  }
+
+  .select__menu-list {
+    background-color: var(--mui-palette-background-paper) !important;
+  }
+
+  .select__option:not(.select__option--is-disabled) {
+    color: var(--mui-palette-text-primary) !important;
+  }
+
+  .select__option--is-focused:not(.select__option--is-disabled) {
+    background-color: var(--mui-palette-primary-darkOpacity) !important;
+    color: var(--mui-palette-text-primary) !important;
+  }
+
+  .select__option--is-selected {
+    background-color: var(--mui-palette-primary-lightOpacity) !important;
+    color: var(--mui-palette-primary-main) !important;
+  }
+}
+
+/* =========================
+   UTILITIES
+========================= */
+
+@layer utilities {
+  .custom-select-label {
+    color: var(--mui-palette-text-primary) !important;
+    font-size: 0.8125rem;
+    transition: color 200ms cubic-bezier(0, 0, 0.2, 1) 0ms;
+    line-height: 1.153;
+    margin-bottom: 0.21rem;
+  }
+
+  .custom-select-label-active {
+    color: var(--mui-palette-primary-main) !important;
+  }
+
+  .custom-error-message {
+    margin-top: 0.25rem;
+    font-size: 0.8125rem;
+  }
+
+  .primary-mui-color {
+    color: var(--mui-palette-text-primary) !important;
+  }
+
+  .error-mui-color {
+    color: var(--mui-palette-error-main) !important;
+  }
+
+  .disabled-mui-text-color {
+    color: var(--mui-palette-text-primary) !important;
+  }
+
+  .select__control--is-disabled {
+    border-color: transparent !important;
+    background-color: var(--mui-palette-action-hover) !important;
+  }
+
+  .error-border .select__control {
+    border: 1px solid var(--mui-palette-error-main) !important;
+  }
+}

@@ -1,0 +1,126 @@
+.home {
+  position: relative;
+  display: grid;
+  place-items: center;
+  min-block-size: clamp(520px, 68dvh, 660px);
+  overflow: hidden;
+}
+
+.globeStage {
+  position: relative;
+  z-index: 2;
+  inline-size: min(58vw, 55dvh, 620px);
+  aspect-ratio: 1;
+  filter: drop-shadow(0 30px 35px rgb(45 75 91 / 11%));
+}
+
+.home[data-theme='dark'] .globeStage {
+  filter: drop-shadow(0 30px 38px rgb(0 0 0 / 22%));
+}
+
+.globe {
+  position: absolute !important;
+  max-inline-size: none !important;
+  inset: 0 !important;
+}
+
+.globe canvas {
+  touch-action: none;
+  user-select: none;
+}
+
+.eagle {
+  position: absolute;
+  z-index: 4;
+  inline-size: clamp(92px, 9vw, 126px);
+  top: 24%;
+  left: 20%;
+  pointer-events: none;
+  transform: translate(-50%, -50%);
+}
+
+.eagle svg {
+  display: block;
+  overflow: visible;
+  inline-size: 100%;
+  filter: drop-shadow(0 5px 4px rgb(36 29 23 / 20%));
+}
+
+.home[data-theme='dark'] .eagle svg {
+  filter: drop-shadow(0 0 1px rgb(255 239 213 / 45%)) drop-shadow(0 5px 5px rgb(0 0 0 / 30%));
+}
+
+.eagleWingBack,
+.eagleWingFront {
+  transform-box: view-box;
+  transform-origin: 54% 59%;
+  animation: eagleWingFlap 3.6s ease-in-out infinite;
+}
+
+.eagleWingBack {
+  transform-origin: 51% 57%;
+  animation-delay: -100ms;
+}
+
+.dragHint {
+  position: absolute;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  inset-block-end: 27px;
+  color: var(--mui-palette-text-disabled);
+  font-size: 10px;
+  font-weight: 450;
+  letter-spacing: 0.02em;
+  pointer-events: none;
+}
+
+.dragHint span {
+  color: var(--mui-palette-text-secondary);
+  font-size: 14px;
+}
+
+@media (max-width: 700px) {
+  .home {
+    min-block-size: clamp(460px, 66dvh, 580px);
+  }
+
+  .globeStage {
+    inline-size: min(86vw, 50dvh, 520px);
+  }
+
+  .dragHint {
+    inset-block-end: 20px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .home,
+  .globeStage {
+    transition: none;
+  }
+
+  .eagleWingBack,
+  .eagleWingFront {
+    animation: none;
+  }
+}
+
+@keyframes eagleWingFlap {
+  0%,
+  40%,
+  100% {
+    transform: rotate(-3deg) scaleY(1);
+  }
+  12%,
+  30% {
+    transform: rotate(6deg) scaleY(0.55);
+  }
+  21% {
+    transform: rotate(-5deg) scaleY(1.08);
+  }
+  70% {
+    transform: rotate(0deg) scaleY(0.94);
+  }
+}

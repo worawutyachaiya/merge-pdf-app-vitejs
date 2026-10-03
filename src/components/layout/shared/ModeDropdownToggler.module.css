@@ -1,0 +1,559 @@
+.toggleButton {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  inline-size: 40px;
+  block-size: 40px;
+  flex: 0 0 auto;
+  border-radius: 999px;
+  color: var(--mui-palette-text-primary);
+  background: transparent;
+  cursor: pointer;
+  transition:
+    color 180ms ease,
+    background-color 180ms ease,
+    transform 180ms ease;
+}
+
+.toggleButton:hover {
+  color: var(--mui-palette-primary-main);
+  background: var(--mui-palette-action-hover);
+  transform: rotate(-8deg) scale(1.06);
+}
+
+.toggleButton:focus-visible {
+  outline: 3px solid rgb(var(--mui-palette-primary-mainChannel) / 0.3);
+  outline-offset: 2px;
+}
+
+.iconWrap {
+  display: grid;
+  place-items: center;
+}
+
+.transitionLayer {
+  --mascot-fill: #20242b;
+  --mascot-ink: #f7f8fa;
+  --mascot-face: #f7f8fa;
+  --mascot-face-ink: #171a20;
+  --mascot-joint: #4c535f;
+  --mascot-soft: rgb(247 248 250 / 0.34);
+  --mascot-glow: rgb(70 78 94 / 0.34);
+  position: fixed;
+  inset: 0;
+  z-index: 2147483647;
+  pointer-events: none;
+}
+
+.transitionLayer[data-target-theme='light'] {
+  --mascot-fill: #f7f8fa;
+  --mascot-ink: #20242b;
+  --mascot-face: #20242b;
+  --mascot-face-ink: #fff;
+  --mascot-joint: #c9cdd4;
+  --mascot-soft: rgb(32 36 43 / 0.22);
+  --mascot-glow: rgb(32 36 43 / 0.2);
+}
+
+.mascotStage {
+  position: absolute;
+  inset: 50% auto auto 50%;
+  display: grid;
+  place-items: center;
+  inline-size: 190px;
+  block-size: 198px;
+  color: var(--mascot-ink);
+  translate: -50% -50%;
+  filter: drop-shadow(0 22px 32px var(--mascot-glow));
+  animation: stage-pop 260ms cubic-bezier(0.2, 0.9, 0.25, 1.35) both;
+}
+
+.mascotStage::after {
+  position: absolute;
+  inset-block-end: 4px;
+  inset-inline-start: 50%;
+  inline-size: 92px;
+  block-size: 12px;
+  border-radius: 50%;
+  background: var(--mascot-soft);
+  content: '';
+  filter: blur(4px);
+  translate: -50% 0;
+  animation: ground-bounce 560ms ease-in-out both;
+}
+
+.mascot {
+  position: relative;
+  z-index: 2;
+  inline-size: 116px;
+  block-size: 146px;
+  border: 3px solid var(--mascot-ink);
+  border-radius: 44% 44% 35% 35% / 31% 31% 24% 24%;
+  color: var(--mascot-ink);
+  background: var(--mascot-fill);
+  box-shadow:
+    inset 9px 0 0 rgb(255 255 255 / 0.06),
+    inset 0 -9px 0 rgb(0 0 0 / 0.1),
+    0 0 0 7px rgb(127 127 127 / 0.08);
+  animation: mascot-dance 560ms ease-in-out both;
+}
+
+.facePanel {
+  position: absolute;
+  z-index: 1;
+  inset-block-start: 13px;
+  inset-inline-start: 50%;
+  inline-size: 87px;
+  block-size: 61px;
+  border: 2px solid var(--mascot-ink);
+  border-radius: 44% 44% 35% 35% / 46% 46% 32% 32%;
+  background: var(--mascot-face);
+  box-shadow: inset 0 -5px 0 rgb(127 127 127 / 0.1);
+  translate: -50% 0;
+}
+
+.eye {
+  position: absolute;
+  z-index: 2;
+  inset-block-start: 32px;
+  inline-size: 12px;
+  block-size: 18px;
+  border-radius: 999px;
+  color: var(--mascot-face-ink);
+  background: currentColor;
+  box-shadow: inset -3px -2px 0 rgb(127 127 127 / 0.32);
+  animation: blink 560ms ease-in-out both;
+}
+
+.eye::after {
+  position: absolute;
+  inset-block-start: 3px;
+  inset-inline-start: 3px;
+  inline-size: 4px;
+  block-size: 5px;
+  border-radius: 50%;
+  background: var(--mascot-face);
+  content: '';
+}
+
+.eyeLeft {
+  inset-inline-start: 30px;
+}
+
+.eyeRight {
+  inset-inline-end: 30px;
+}
+
+.smile {
+  position: absolute;
+  z-index: 2;
+  inset-block-start: 54px;
+  inset-inline-start: 50%;
+  inline-size: 19px;
+  block-size: 9px;
+  border-block-end: 3px solid var(--mascot-face-ink);
+  border-radius: 0 0 999px 999px;
+  translate: -50% 0;
+}
+
+.cheekLeft,
+.cheekRight {
+  position: absolute;
+  z-index: 2;
+  inset-block-start: 52px;
+  inline-size: 10px;
+  block-size: 6px;
+  border-radius: 50%;
+  background: var(--mascot-face-ink);
+  opacity: 0.24;
+}
+
+.cheekLeft {
+  inset-inline-start: 18px;
+}
+
+.cheekRight {
+  inset-inline-end: 18px;
+}
+
+.antennaRack {
+  position: absolute;
+  z-index: -1;
+  inset-block-start: -24px;
+  inset-inline-end: 17px;
+  display: flex;
+  align-items: flex-end;
+  gap: 3px;
+  rotate: 31deg;
+  transform-origin: bottom center;
+  animation: antenna-wiggle 280ms ease-in-out 2 alternate;
+}
+
+.antenna {
+  position: relative;
+  display: block;
+  inline-size: 7px;
+  border: 2px solid var(--mascot-ink);
+  border-radius: 999px;
+  background: var(--mascot-joint);
+}
+
+.antenna::after {
+  position: absolute;
+  inset-block-start: -5px;
+  inset-inline-start: 50%;
+  inline-size: 8px;
+  block-size: 8px;
+  border: 2px solid var(--mascot-ink);
+  border-radius: 50%;
+  background: var(--mascot-fill);
+  content: '';
+  translate: -50% 0;
+}
+
+.antennaShort {
+  block-size: 16px;
+}
+
+.antennaMedium {
+  block-size: 23px;
+}
+
+.antennaTall {
+  block-size: 30px;
+}
+
+.ear {
+  position: absolute;
+  z-index: -1;
+  inset-block-start: 31px;
+  inline-size: 14px;
+  block-size: 31px;
+  border: 3px solid var(--mascot-ink);
+  border-radius: 50%;
+  background: var(--mascot-joint);
+  box-shadow: inset 0 0 0 3px var(--mascot-fill);
+}
+
+.earLeft {
+  inset-inline-start: -10px;
+}
+
+.earRight {
+  inset-inline-end: -10px;
+}
+
+.chestPanel {
+  position: absolute;
+  inset-block-start: 88px;
+  inset-inline-start: 50%;
+  inline-size: 72px;
+  block-size: 38px;
+  border: 2px solid var(--mascot-soft);
+  border-radius: 10px 10px 17px 17px;
+  color: var(--mascot-ink);
+  translate: -50% 0;
+}
+
+.chestMark {
+  position: absolute;
+  inset-block-start: 10px;
+  inset-inline-start: 8px;
+  font-family: Arial, sans-serif;
+  font-size: 10px;
+  font-style: italic;
+  font-weight: 900;
+  letter-spacing: -0.35px;
+  line-height: 1;
+}
+
+.chestLight {
+  position: absolute;
+  inset-block-start: 12px;
+  inset-inline-end: 8px;
+  inline-size: 9px;
+  block-size: 9px;
+  border: 2px solid var(--mascot-ink);
+  border-radius: 50%;
+  background: var(--mascot-face);
+  animation: status-pulse 420ms ease-in-out infinite alternate;
+}
+
+.arm,
+.leg {
+  position: absolute;
+  z-index: -1;
+  display: block;
+  inline-size: 39px;
+  block-size: 13px;
+  border: 3px solid var(--mascot-ink);
+  border-radius: 999px;
+  background: repeating-linear-gradient(90deg, var(--mascot-joint) 0 8px, var(--mascot-fill) 8px 13px);
+  transform-origin: center;
+}
+
+.arm::after {
+  position: absolute;
+  inset-block-start: 50%;
+  inline-size: 17px;
+  block-size: 17px;
+  border: 4px solid var(--mascot-ink);
+  border-block-start-color: transparent;
+  border-radius: 50%;
+  content: '';
+}
+
+.arm {
+  inset-block-start: 82px;
+}
+
+.armLeft {
+  inset-inline-start: -31px;
+  animation: arm-left 360ms ease-in-out 2 alternate;
+}
+
+.armLeft::after {
+  inset-inline-start: -13px;
+  translate: 0 -50%;
+  rotate: 90deg;
+}
+
+.armRight {
+  inset-inline-end: -31px;
+  animation: arm-right 360ms ease-in-out 2 alternate;
+}
+
+.armRight::after {
+  inset-inline-end: -13px;
+  translate: 0 -50%;
+  rotate: -90deg;
+}
+
+.leg {
+  inset-block-end: -19px;
+  inline-size: 15px;
+  block-size: 29px;
+  background: repeating-linear-gradient(0deg, var(--mascot-joint) 0 7px, var(--mascot-fill) 7px 11px);
+}
+
+.leg::after {
+  position: absolute;
+  inset-block-end: -8px;
+  inline-size: 29px;
+  block-size: 15px;
+  border: 3px solid var(--mascot-ink);
+  border-radius: 50% 50% 42% 42%;
+  background: var(--mascot-fill);
+  content: '';
+}
+
+.legLeft {
+  inset-inline-start: 25px;
+  rotate: 9deg;
+}
+
+.legLeft::after {
+  inset-inline-end: -3px;
+}
+
+.legRight {
+  inset-inline-end: 25px;
+  rotate: -9deg;
+}
+
+.legRight::after {
+  inset-inline-start: -3px;
+}
+
+.sparkle {
+  position: absolute;
+  z-index: 3;
+  inline-size: 17px;
+  block-size: 17px;
+  background: currentColor;
+  clip-path: polygon(50% 0, 62% 38%, 100% 50%, 62% 62%, 50% 100%, 38% 62%, 0 50%, 38% 38%);
+  animation: sparkle 360ms ease-in-out 2 alternate;
+}
+
+.sparkleLeft {
+  inset-block-start: 6px;
+  inset-inline-start: 2px;
+}
+
+.sparkleRight {
+  inset-block-start: -7px;
+  inset-inline-end: 4px;
+  animation-delay: 120ms;
+}
+
+.transitionLayer[data-phase='merge'] .mascotStage {
+  filter: none;
+}
+
+.transitionLayer[data-phase='merge'] .mascotStage::after {
+  opacity: 0;
+  transition: opacity 100ms ease;
+}
+
+.transitionLayer[data-phase='merge'] .mascot {
+  animation: mascot-into-wave 200ms cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+.transitionLayer[data-phase='merge'] .arm,
+.transitionLayer[data-phase='merge'] .leg,
+.transitionLayer[data-phase='merge'] .antennaRack,
+.transitionLayer[data-phase='merge'] .ear,
+.transitionLayer[data-phase='merge'] .facePanel,
+.transitionLayer[data-phase='merge'] .eye,
+.transitionLayer[data-phase='merge'] .cheekLeft,
+.transitionLayer[data-phase='merge'] .cheekRight,
+.transitionLayer[data-phase='merge'] .smile,
+.transitionLayer[data-phase='merge'] .chestPanel,
+.transitionLayer[data-phase='merge'] .sparkle {
+  opacity: 0;
+  transition: opacity 110ms ease;
+}
+
+@keyframes stage-pop {
+  from {
+    opacity: 0;
+    scale: 0.35;
+    rotate: -12deg;
+  }
+  to {
+    opacity: 1;
+    scale: 1;
+    rotate: 0deg;
+  }
+}
+
+@keyframes mascot-into-wave {
+  from {
+    inline-size: 116px;
+    block-size: 146px;
+    border-radius: 44% 44% 35% 35% / 31% 31% 24% 24%;
+    scale: 1;
+  }
+  to {
+    inline-size: 108px;
+    block-size: 108px;
+    border-radius: 50%;
+    scale: 1;
+    box-shadow: 0 0 0 1px var(--mascot-fill);
+  }
+}
+
+@keyframes mascot-dance {
+  0%,
+  100% {
+    translate: 0 0;
+    rotate: -5deg;
+    scale: 1 0.97;
+  }
+  25% {
+    translate: 0 -12px;
+    rotate: 8deg;
+    scale: 0.96 1.05;
+  }
+  50% {
+    translate: 0 1px;
+    rotate: -8deg;
+    scale: 1.05 0.95;
+  }
+  75% {
+    translate: 0 -9px;
+    rotate: 7deg;
+    scale: 0.98 1.04;
+  }
+}
+
+@keyframes antenna-wiggle {
+  from {
+    rotate: 25deg;
+  }
+  to {
+    rotate: 36deg;
+  }
+}
+
+@keyframes status-pulse {
+  from {
+    opacity: 0.35;
+    scale: 0.75;
+  }
+  to {
+    opacity: 1;
+    scale: 1;
+  }
+}
+
+@keyframes ground-bounce {
+  0%,
+  100% {
+    opacity: 0.45;
+    scale: 1;
+  }
+  25%,
+  75% {
+    opacity: 0.18;
+    scale: 0.66;
+  }
+  50% {
+    opacity: 0.54;
+    scale: 1.08;
+  }
+}
+
+@keyframes arm-left {
+  from {
+    rotate: 22deg;
+  }
+  to {
+    rotate: -38deg;
+    translate: -2px -6px;
+  }
+}
+
+@keyframes arm-right {
+  from {
+    rotate: -22deg;
+  }
+  to {
+    rotate: 38deg;
+    translate: 2px -6px;
+  }
+}
+
+@keyframes blink {
+  0%,
+  42%,
+  58%,
+  100% {
+    scale: 1;
+  }
+  48%,
+  52% {
+    scale: 1 0.12;
+  }
+}
+
+@keyframes sparkle {
+  from {
+    opacity: 0.25;
+    scale: 0.6;
+    rotate: -20deg;
+  }
+  to {
+    opacity: 1;
+    scale: 1.2;
+    rotate: 16deg;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .toggleButton,
+  .toggleButton:hover {
+    transform: none;
+    transition: none;
+  }
+}

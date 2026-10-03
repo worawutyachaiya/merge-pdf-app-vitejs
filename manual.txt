@@ -1,0 +1,13 @@
+bun create next-app
+
+bun --bun run dev
+
+Configure git to diff Bun's lockb lockfile
+https://bun.sh/guides/install/git-diff-bun-lockfile
+
+
+Wording to find editing by Ausada
+add new by Template
+
+
+bun --bun run dev

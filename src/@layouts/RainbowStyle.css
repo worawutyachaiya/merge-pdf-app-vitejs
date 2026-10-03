@@ -1,0 +1,272 @@
+@tailwind utilities;
+
+.app-environment-shell {
+  position: relative;
+  isolation: isolate;
+  min-block-size: 100dvh;
+  transition: background 450ms ease;
+  background:
+    var(--app-seasonal-background, linear-gradient(transparent, transparent)),
+    var(--app-environment-background, linear-gradient(transparent, transparent)), var(--mui-palette-background-default);
+}
+
+.app-environment-shell::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -2;
+  pointer-events: none;
+  background:
+    var(--app-seasonal-background, linear-gradient(transparent, transparent)),
+    var(--app-environment-background, linear-gradient(transparent, transparent)), var(--mui-palette-background-default);
+}
+
+.app-environment-shell[data-custom-background='true'] {
+  --app-user-background-overlay: linear-gradient(
+    rgb(255 255 255 / var(--app-user-background-shading, 0.55)),
+    rgb(255 255 255 / var(--app-user-background-shading, 0.55))
+  );
+
+  background: var(--mui-palette-background-default);
+}
+
+.app-user-background-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: cover;
+  transition: opacity 450ms ease;
+}
+
+.app-user-background-layer::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background:
+    var(--app-seasonal-background, linear-gradient(transparent, transparent)),
+    var(--app-environment-background, linear-gradient(transparent, transparent)), var(--app-user-background-overlay);
+}
+
+.app-environment-shell {
+  --app-seasonal-background: linear-gradient(transparent, transparent);
+  --app-seasonal-panel: rgb(255 255 255 / 0.04);
+  --app-seasonal-border: rgb(255 255 255 / 0.12);
+}
+
+.app-environment-shell[data-seasonal-theme='winter'] {
+  --app-seasonal-background:
+    radial-gradient(circle at 82% 4%, rgb(56 189 248 / 0.2), transparent 34%),
+    linear-gradient(135deg, rgb(30 64 175 / 0.16), transparent 50%);
+  --app-seasonal-panel: rgb(125 211 252 / 0.14);
+  --app-seasonal-border: rgb(125 211 252 / 0.3);
+}
+
+.app-environment-shell[data-seasonal-theme='rainy'] {
+  --app-seasonal-background:
+    radial-gradient(circle at 82% 4%, rgb(96 165 250 / 0.2), transparent 34%),
+    linear-gradient(135deg, rgb(30 64 175 / 0.14), transparent 52%);
+  --app-seasonal-panel: rgb(147 197 253 / 0.13);
+  --app-seasonal-border: rgb(96 165 250 / 0.3);
+}
+
+.app-environment-shell[data-seasonal-theme='autumn'] {
+  --app-seasonal-background:
+    radial-gradient(circle at 82% 4%, rgb(234 88 12 / 0.22), transparent 34%),
+    linear-gradient(135deg, rgb(127 29 29 / 0.16), transparent 52%);
+  --app-seasonal-panel: rgb(251 146 60 / 0.14);
+  --app-seasonal-border: rgb(249 115 22 / 0.3);
+}
+
+.app-environment-shell[data-seasonal-theme='winter'] .ts-vertical-layout-navbar,
+.app-environment-shell[data-seasonal-theme='winter'] .ts-horizontal-layout-header,
+.app-environment-shell[data-seasonal-theme='rainy'] .ts-vertical-layout-navbar,
+.app-environment-shell[data-seasonal-theme='rainy'] .ts-horizontal-layout-header,
+.app-environment-shell[data-seasonal-theme='autumn'] .ts-vertical-layout-navbar,
+.app-environment-shell[data-seasonal-theme='autumn'] .ts-horizontal-layout-header {
+  background:
+    linear-gradient(var(--app-seasonal-panel), var(--app-seasonal-panel)), var(--mui-palette-background-paper) !important;
+  border-color: var(--app-seasonal-border);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+}
+
+.app-environment-shell[data-seasonal-theme='winter'] .MuiCard-root,
+.app-environment-shell[data-seasonal-theme='rainy'] .MuiCard-root,
+.app-environment-shell[data-seasonal-theme='autumn'] .MuiCard-root {
+  border-color: var(--app-seasonal-border);
+  box-shadow: 0 8px 28px rgb(0 0 0 / 0.08);
+  transition:
+    background-color 450ms ease,
+    background-image 450ms ease,
+    border-color 450ms ease,
+    box-shadow 450ms ease;
+}
+.app-seasonal-theme-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  opacity: 0;
+  animation: app-seasonal-theme-enter 500ms ease forwards;
+}
+
+@keyframes app-seasonal-theme-enter {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+.app-environment-shell[data-seasonal-theme='winter'] .app-seasonal-theme-layer {
+  filter: drop-shadow(0 0 4px rgb(186 230 253 / 0.18));
+}
+
+.app-environment-shell[data-seasonal-theme='rainy'] .app-seasonal-theme-layer {
+  opacity: 1;
+  filter: drop-shadow(0 4px 3px rgb(96 165 250 / 0.1));
+}
+
+.app-environment-shell[data-seasonal-theme='autumn'] .app-seasonal-theme-layer {
+  filter: drop-shadow(0 3px 5px rgb(154 52 18 / 0.18));
+}
+
+.app-environment-shell[data-seasonal-theme='winter'] .MuiCard-root {
+  background-image: linear-gradient(135deg, rgb(186 230 253 / 0.08), transparent 60%);
+}
+
+.app-environment-shell[data-seasonal-theme='rainy'] .MuiCard-root {
+  background-image: linear-gradient(135deg, rgb(96 165 250 / 0.08), rgb(30 64 175 / 0.03));
+}
+
+.app-environment-shell[data-seasonal-theme='autumn'] .MuiCard-root {
+  background-image: linear-gradient(135deg, rgb(251 146 60 / 0.08), rgb(127 29 29 / 0.03));
+}
+
+.app-environment-shell > .ts-vertical-layout,
+.app-environment-shell > .ts-horizontal-layout {
+  position: relative;
+  z-index: 1;
+  min-inline-size: 0;
+}
+
+.app-environment-shell[data-custom-background='true'] .ts-vertical-nav-bg-color-container {
+  background-color: rgb(255 255 255 / 0.66) !important;
+  border-inline-end: 1px solid rgb(255 255 255 / 0.16);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+}
+
+.dark.app-environment-shell[data-custom-background='true'] {
+  --app-user-background-overlay: linear-gradient(
+    rgb(16 18 27 / var(--app-user-background-shading, 0.55)),
+    rgb(16 18 27 / var(--app-user-background-shading, 0.55))
+  );
+}
+
+.dark.app-environment-shell[data-custom-background='true'] .ts-vertical-nav-bg-color-container {
+  background-color: rgb(16 18 27 / 0.52) !important;
+  border-inline-end-color: rgb(255 255 255 / 0.1);
+}
+
+.app-environment-shell[data-app-env='sit'] {
+  --app-environment-background:
+    radial-gradient(circle at 20% 0%, rgb(37 99 235 / 0.14), transparent 32%),
+    linear-gradient(135deg, rgb(59 130 246 / 0.16), transparent 42%);
+}
+
+.app-environment-shell[data-app-env='uat'] {
+  --app-environment-background:
+    radial-gradient(circle at 20% 0%, rgb(245 158 11 / 0.16), transparent 32%),
+    linear-gradient(135deg, rgb(251 191 36 / 0.18), transparent 42%);
+}
+
+.dark.app-environment-shell[data-app-env='sit'] {
+  --app-environment-background:
+    radial-gradient(circle at 20% 0%, rgb(96 165 250 / 0.2), transparent 34%),
+    linear-gradient(135deg, rgb(30 64 175 / 0.28), transparent 46%);
+}
+
+.dark.app-environment-shell[data-app-env='uat'] {
+  --app-environment-background:
+    radial-gradient(circle at 20% 0%, rgb(245 158 11 / 0.24), transparent 34%),
+    linear-gradient(135deg, rgb(146 64 14 / 0.28), transparent 46%);
+}
+@media (prefers-reduced-motion: reduce) {
+  .app-environment-shell,
+  .app-environment-shell .MuiCard-root,
+  .app-environment-shell .app-user-background-layer::after {
+    transition: none;
+  }
+
+  .app-seasonal-theme-layer {
+    animation: none;
+  }
+}
+@keyframes jumbo-a742e9dc {
+  0% {
+    background-position:
+      50% 50%,
+      50% 50%;
+  }
+
+  to {
+    background-position:
+      350% 50%,
+      350% 50%;
+  }
+}
+
+.jumbo[data-v-a742e9dc] {
+  --stripes: repeating-linear-gradient(100deg, #fff 0%, #fff 7%, transparent 10%, transparent 12%, #fff 16%);
+  --stripesDark: repeating-linear-gradient(100deg, #000 0%, #000 7%, transparent 10%, transparent 12%, #000 16%);
+  --rainbow: repeating-linear-gradient(100deg, #60a5fa 10%, #e879f9 16%, #5eead4 22%, #60a5fa 30%);
+  contain: strict;
+  contain-intrinsic-size: 100vw 20vh;
+  background-image: var(--stripes), var(--rainbow);
+  background-size: 300%, 200%;
+  background-position:
+    50% 50%,
+    50% 50%;
+  block-size: inherit;
+  -webkit-transform: translateZ(0);
+  -webkit-perspective: 1000;
+  -webkit-backface-visibility: hidden;
+  filter: invert(100%);
+  -webkit-mask-image: radial-gradient(ellipse at 100% 0%, black 40%, transparent 70%);
+  mask-image: radial-gradient(ellipse at 100% 0%, black 40%, transparent 70%);
+  pointer-events: none;
+  z-index: -1;
+}
+
+.jumbo[data-v-a742e9dc]:after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image: var(--stripes), var(--rainbow);
+  background-size: 200%, 100%;
+  background-attachment: fixed;
+  mix-blend-mode: difference;
+}
+
+.-animate.jumbo[data-v-a742e9dc]:after {
+  animation: jumbo-a742e9dc 90s linear infinite;
+}
+
+.-static.jumbo[data-v-a742e9dc]:after {
+  animation: unset !important;
+}
+
+.dark .jumbo[data-v-a742e9dc] {
+  background-image: var(--stripesDark), var(--rainbow);
+  filter: opacity(50%) saturate(200%);
+}
+
+.dark .jumbo[data-v-a742e9dc]:after {
+  background-image: var(--stripesDark), var(--rainbow);
+}
