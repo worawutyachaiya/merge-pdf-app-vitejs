@@ -514,7 +514,7 @@ const MergePdfPage = () => {
                 <Card>
                   <CardHeader
                     title='Import documents'
-                    subheader='Import PDF or images and review the page order before completion.'
+                    subheader='Import PDF, Excel or images and review the page order before completion.'
                     titleTypographyProps={{ variant: 'h5' }}
                   />
                   <CardContent>
@@ -546,13 +546,19 @@ const MergePdfPage = () => {
                       )}
                       <Grid size={{ xs: 12, md: 7 }}>
                         <Button component='label' variant='outlined' color='primary' fullWidth sx={{ mt: 3.5 }}>
-                          {files.length ? `${files.length} file(s) selected` : 'Choose PDF or image'}
+                          {files.length
+                            ? `${files.length} file(s) selected`
+                            : importMode === 'combined'
+                              ? 'Choose PDF'
+                              : 'Choose PDF, Excel or image'}
                           <input
                             id='merge-pdf-file-input'
                             type='file'
                             hidden
                             multiple
-                            accept={importMode === 'combined' ? '.pdf' : '.pdf,.png,.jpg,.jpeg,.webp,.tif,.tiff'}
+                            accept={
+                              importMode === 'combined' ? '.pdf' : '.pdf,.xlsx,.xls,.png,.jpg,.jpeg,.webp,.tif,.tiff'
+                            }
                             onChange={onFilesChange}
                           />
                         </Button>
@@ -568,7 +574,9 @@ const MergePdfPage = () => {
                       {importMode === 'manual' && (
                         <Grid size={12}>
                           <Alert severity='info'>
-                            Excel files are not supported yet. Export them to PDF before importing.
+                            Excel is converted to PDF using saved cell values. Save the workbook in Excel first and
+                            review the converted pages. Fonts are normalized to Tahoma; .xls uses a basic table layout.
+                            For charts or complex layouts, export PDF from Excel before importing.
                           </Alert>
                         </Grid>
                       )}

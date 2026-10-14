@@ -36,7 +36,7 @@ const SortablePage = ({
   const [visible, setVisible] = useState(false)
   const cardRef = useRef<HTMLDivElement | null>(null)
   const category = MERGE_PDF_CATEGORIES.find(item => item.id === page.CATEGORY_ID)
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+  const { attributes, listeners, setNodeRef, setActivatorNode, transform, transition, isDragging } = useSortable({
     id: page.PAGE_ID,
     disabled
   })
@@ -58,6 +58,11 @@ const SortablePage = ({
         setNodeRef(node as HTMLElement | null)
         cardRef.current = node as HTMLDivElement | null
       }}
+      onPointerDown={event => {
+        // Action controls keep their normal clicks; the rest of the card starts a drag.
+        if (event.target instanceof Element && event.target.closest('[data-page-action]')) return
+        listeners?.onPointerDown?.(event)
+      }}
       sx={{
         transform: CSS.Transform.toString(transform),
         transition,
@@ -69,11 +74,15 @@ const SortablePage = ({
         borderRadius: 1,
         overflow: 'hidden',
         boxShadow: isDragging ? 6 : 1,
-        minWidth: 0
+        minWidth: 0,
+        cursor: disabled ? 'default' : isDragging ? 'grabbing' : 'grab',
+        touchAction: 'none',
+        userSelect: 'none'
       }}
     >
       <Box sx={{ display: 'flex', justifyContent: 'space-between', p: 1, gap: 0.5 }}>
         <Checkbox
+          data-page-action
           size='small'
           checked={checked}
           disabled={disabled}
@@ -82,17 +91,18 @@ const SortablePage = ({
           sx={{ p: 0.5 }}
         />
         <IconButton
+          ref={setActivatorNode}
           size='small'
           aria-label={`Drag page ${page.SORT_ORDER}`}
           title='Drag to reorder'
           disabled={disabled}
           {...attributes}
-          {...listeners}
+          onKeyDown={listeners?.onKeyDown}
           sx={{ cursor: disabled ? 'default' : 'grab', touchAction: 'none' }}
         >
           <i className='tabler-grip-vertical' />
         </IconButton>
-        <Box sx={{ display: 'flex' }}>
+        <Box data-page-action sx={{ display: 'flex' }}>
           <IconButton
             size='small'
             aria-label={`Rotate page ${page.SORT_ORDER} left`}
@@ -134,7 +144,7 @@ const SortablePage = ({
           p: 1,
           border: 0,
           bgcolor: 'transparent',
-          cursor: 'pointer',
+          cursor: 'inherit',
           textAlign: 'left'
         }}
       >

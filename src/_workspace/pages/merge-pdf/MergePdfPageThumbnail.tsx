@@ -22,6 +22,7 @@ const MergePdfPageThumbnail = ({ jobId, pageId, rotation, enabled = true, label 
         component='img'
         alt={label}
         src={url}
+        draggable={false}
         sx={{ width: '100%', height: '100%', objectFit: 'contain', pointerEvents: 'none' }}
       />
     )
