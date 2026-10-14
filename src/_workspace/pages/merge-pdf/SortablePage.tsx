@@ -19,6 +19,7 @@ interface Props {
   onRemove: () => void
   checked: boolean
   onCheck: (checked: boolean) => void
+  localImage?: string
 }
 
 const SortablePage = ({
@@ -31,12 +32,13 @@ const SortablePage = ({
   onRotate,
   onRemove,
   checked,
-  onCheck
+  onCheck,
+  localImage
 }: Props) => {
   const [visible, setVisible] = useState(false)
   const cardRef = useRef<HTMLDivElement | null>(null)
   const category = MERGE_PDF_CATEGORIES.find(item => item.id === page.CATEGORY_ID)
-  const { attributes, listeners, setNodeRef, setActivatorNode, transform, transition, isDragging } = useSortable({
+  const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } = useSortable({
     id: page.PAGE_ID,
     disabled
   })
@@ -91,13 +93,13 @@ const SortablePage = ({
           sx={{ p: 0.5 }}
         />
         <IconButton
-          ref={setActivatorNode}
+          ref={setActivatorNodeRef}
           size='small'
           aria-label={`Drag page ${page.SORT_ORDER}`}
           title='Drag to reorder'
           disabled={disabled}
           {...attributes}
-          onKeyDown={listeners?.onKeyDown}
+          onKeyDown={event => listeners?.onKeyDown?.(event)}
           sx={{ cursor: disabled ? 'default' : 'grab', touchAction: 'none' }}
         >
           <i className='tabler-grip-vertical' />
@@ -164,6 +166,7 @@ const SortablePage = ({
             rotation={page.ROTATION_DEGREES}
             enabled={visible}
             label={`Page ${page.SORT_ORDER} preview`}
+            localImage={localImage}
           />
         </Box>
         <Typography variant='body2' sx={{ mt: 1 }} noWrap>

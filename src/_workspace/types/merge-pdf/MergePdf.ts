@@ -78,3 +78,7 @@ export const MERGE_PDF_CATEGORIES = [
 ] as const
 
 export const REQUIRED_MERGE_PDF_CATEGORY_IDS = [1, 2, 4] as const
+export type BatchPageAction =
+  | { kind: 'category'; categoryId: number }
+  | { kind: 'rotate'; delta: 90 | 270 }
+  | { kind: 'remove' }

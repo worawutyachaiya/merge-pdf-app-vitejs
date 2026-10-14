@@ -6,6 +6,14 @@ import type { ResultDataResponseI } from '@/libs/axios/types/AxiosResponseInterf
 import type { AxiosResponse } from 'axios'
 
 const key = 'MERGE_PDF'
+export const useMergePdfNextCode = (enabled: boolean) =>
+  useQuery({
+    queryKey: [key, 'next-code'],
+    queryFn: MergePdfServices.nextCode,
+    enabled,
+    staleTime: 0,
+    gcTime: 0
+  })
 export const useMergePdfJobs = (params: Parameters<typeof MergePdfServices.list>[0], enabled = true) =>
   useQuery({
     queryKey: [key, 'jobs', params],
@@ -31,11 +39,18 @@ export const useMergePdfPagePreview = (
   jobId: number | null,
   pageId: number | null,
   rotation: number,
-  enabled: boolean
+  enabled: boolean,
+  preparedPdf?: Blob,
+  sourcePage?: number
 ) =>
   useQuery({
     queryKey: [key, 'page-preview', jobId, pageId, rotation],
-    queryFn: async ({ signal }) => (await MergePdfServices.pagePreview(jobId ?? 0, pageId ?? 0, signal)).data,
+    queryFn: async ({ signal }) =>
+      (
+        await (preparedPdf
+          ? MergePdfServices.preparedPagePreview(preparedPdf, sourcePage ?? 1, rotation, signal)
+          : MergePdfServices.pagePreview(jobId ?? 0, pageId ?? 0, signal, rotation))
+      ).data,
     enabled: enabled && jobId !== null && pageId !== null,
     staleTime: 300_000,
     retry: 1
@@ -44,7 +59,7 @@ export const useMergePdfPagePreview = (
 export const useMergePdfPageThumbnail = (jobId: number, pageId: number, rotation: number, enabled: boolean) =>
   useQuery({
     queryKey: [key, 'page-thumbnail', jobId, pageId, rotation],
-    queryFn: async ({ signal }) => (await MergePdfServices.pageThumbnail(jobId, pageId, signal)).data,
+    queryFn: async ({ signal }) => (await MergePdfServices.pageThumbnail(jobId, pageId, signal, rotation)).data,
     meta: { suppressErrorToast: true },
     enabled,
     staleTime: 300_000,
@@ -73,6 +88,28 @@ export const useMergePdfActions = () => {
   }
   return {
     create: useMutation({ mutationFn: MergePdfServices.create, onSuccess: accept }),
+    saveEditor: useMutation({
+      mutationFn: (input: {
+        jobId: number
+        rowVersion: number
+        changes: unknown
+        files: File[]
+        mode: 'draft' | 'complete'
+      }) => MergePdfServices.saveEditor(input.jobId, input.rowVersion, input.changes, input.files, input.mode),
+      onSuccess: accept
+    }),
+    batchPages: useMutation({
+      mutationFn: (input: {
+        jobId: number
+        rowVersion: number
+        pageIds: number[]
+        action: Parameters<typeof MergePdfServices.batchPages>[3]
+      }) => MergePdfServices.batchPages(input.jobId, input.rowVersion, input.pageIds, input.action),
+      onSuccess: accept,
+      onError: (_error, input) => {
+        void queryClient.invalidateQueries({ queryKey: [key, 'detail', input.jobId] })
+      }
+    }),
     deleteJob: useMutation({
       mutationFn: async (input: { jobId: number; rowVersion: number }) => {
         const response = await MergePdfServices.deleteJob(input.jobId, input.rowVersion)
