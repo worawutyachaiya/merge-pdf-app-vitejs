@@ -21,8 +21,8 @@ const MergePdfDeleteModal = ({ job, onClose, onDeleted }: Props) => {
   const actions = useMergePdfActions()
   const remove = async () => {
     try {
-      await actions.deleteDraft.mutateAsync({ jobId: job.JOB_ID, rowVersion: job.ROW_VERSION })
-      ToastMessageSuccess({ title: 'Delete Draft', message: 'Draft deleted' })
+      await actions.deleteJob.mutateAsync({ jobId: job.JOB_ID, rowVersion: job.ROW_VERSION })
+      ToastMessageSuccess({ title: 'Delete Document', message: 'Document and shared PDF deleted' })
       onDeleted()
       onClose()
     } catch (error: unknown) {
@@ -33,8 +33,8 @@ const MergePdfDeleteModal = ({ job, onClose, onDeleted }: Props) => {
           ? response.Message
           : error instanceof Error
             ? error.message
-            : 'Unable to delete draft'
-      ToastMessageError({ title: 'Delete Draft', message })
+            : 'Unable to delete document'
+      ToastMessageError({ title: 'Delete Document', message })
     }
   }
 
@@ -45,7 +45,7 @@ const MergePdfDeleteModal = ({ job, onClose, onDeleted }: Props) => {
         maxWidth='sm'
         fullWidth
         TransitionComponent={Transition}
-        onClose={(_, reason) => !actions.deleteDraft.isPending && reason !== 'backdropClick' && onClose()}
+        onClose={(_, reason) => !actions.deleteJob.isPending && reason !== 'backdropClick' && onClose()}
         sx={{
           '& .MuiDialog-paper': { overflow: 'visible' },
           '& .MuiDialog-container': { justifyContent: 'center', alignItems: 'flex-start' }
@@ -54,25 +54,25 @@ const MergePdfDeleteModal = ({ job, onClose, onDeleted }: Props) => {
       >
         <DialogTitle>
           <Typography variant='h5' component='span'>
-            Delete Draft
+            Delete Document
           </Typography>
-          <DialogCloseButton onClick={onClose} disabled={actions.deleteDraft.isPending} disableRipple>
+          <DialogCloseButton onClick={onClose} disabled={actions.deleteJob.isPending} disableRipple>
             <i className='tabler-x' />
           </DialogCloseButton>
         </DialogTitle>
         <DialogContent>
-          <Typography>Delete draft "{job.JOB_TITLE}" and remove it from search results?</Typography>
+          <Typography>Delete "{job.OUTPUT_FILE_NAME ?? job.JOB_TITLE}" and its PDF from the shared folder? This also removes the document from search results.</Typography>
         </DialogContent>
         <DialogActions>
           <Button
             variant='contained'
             color='error'
-            disabled={actions.deleteDraft.isPending}
+            disabled={actions.deleteJob.isPending}
             onClick={() => setConfirmOpen(true)}
           >
             Delete
           </Button>
-          <Button variant='tonal' color='secondary' disabled={actions.deleteDraft.isPending} onClick={onClose}>
+          <Button variant='tonal' color='secondary' disabled={actions.deleteJob.isPending} onClick={onClose}>
             Close
           </Button>
         </DialogActions>
@@ -82,7 +82,7 @@ const MergePdfDeleteModal = ({ job, onClose, onDeleted }: Props) => {
         onConfirmClick={() => void remove()}
         onCloseClick={() => setConfirmOpen(false)}
         isDelete
-        isLoading={actions.deleteDraft.isPending}
+        isLoading={actions.deleteJob.isPending}
       />
     </>
   )

@@ -26,7 +26,10 @@ import ActionsMenu from '@/libs/material-react-table/components/ActionsMenu'
 import { MENU_ID } from './env'
 import MergePdfDeleteModal from './MergePdfDeleteModal'
 import MergePdfViewModal from './MergePdfViewModal'
+import MergePdfPreviewModal from './MergePdfPreviewModal'
 import type { MergePdfListValues } from './validationSchema'
+import { documentStatusColumns } from './documentStatus'
+import DocumentStatusIndicator from './DocumentStatusIndicator'
 
 interface Props {
   onOpen: (jobId: number) => void
@@ -40,6 +43,7 @@ const MergePdfSearchResult = ({ onOpen, onAdd, refreshVersion }: Props) => {
   const checkPermission = useCheckPermission()
   const [openView, setOpenView] = useState(false)
   const [openDelete, setOpenDelete] = useState(false)
+  const [previewJob, setPreviewJob] = useState<MergePdfJob | null>(null)
   const [rowSelected, setRowSelected] = useState<MRT_Row<MergePdfJob> | null>(null)
   const [columnVisibility, setColumnVisibility] = useState<MRT_VisibilityState>(
     getValues('searchResults.columnVisibility')
@@ -102,6 +106,7 @@ const MergePdfSearchResult = ({ onOpen, onAdd, refreshVersion }: Props) => {
         accessorKey: 'STATUS',
         header: 'STATUS',
         size: 140,
+        minSize: 140,
         enableColumnFilter: false,
         Cell: ({ row }) => (
           <Chip
@@ -119,18 +124,69 @@ const MergePdfSearchResult = ({ onOpen, onAdd, refreshVersion }: Props) => {
         )
       },
       {
+        accessorKey: 'OUTPUT_FILE_NAME',
+        header: 'PDF FILE',
+        size: 180,
+        minSize: 180,
+        enableSorting: false,
+        enableColumnFilter: false,
+        Cell: ({ row }) =>
+          row.original.OUTPUT_FILE_NAME ? (
+            <Button
+              onClick={() => {
+                setPreviewJob(row.original)
+              }}
+              size='small'
+              startIcon={<i className='tabler-folder-open' />}
+            >
+              {row.original.OUTPUT_FILE_NAME}
+            </Button>
+          ) : (
+            '—'
+          )
+      },
+      {
         accessorKey: 'JOB_TITLE',
         header: 'DOCUMENT NAME',
+        size: 240,
+        minSize: 220,
         filterVariant: 'text',
         columnFilterModeOptions: ['contains'],
-        filterFn: 'contains'
+        filterFn: 'contains',
+        Cell: ({ row }) => /^I\d{2}-\d{4,}$/.test(row.original.JOB_CODE) ? row.original.JOB_CODE : row.original.JOB_TITLE
       },
-      { accessorKey: 'DOCUMENT_COUNT', header: 'FILES', size: 100, enableColumnFilter: false },
-      { accessorKey: 'PAGE_COUNT', header: 'PAGES', size: 100, enableColumnFilter: false },
+      { accessorKey: 'DOCUMENT_COUNT', header: 'FILES', size: 155, minSize: 150, enableColumnFilter: false },
+      { accessorKey: 'PAGE_COUNT', header: 'PAGES', size: 155, minSize: 150, enableColumnFilter: false },
+      ...documentStatusColumns.map<MRT_ColumnDef<MergePdfJob>>(category => ({
+        id: category.id,
+        header: category.label,
+        accessorFn: job => job.DOCUMENT_PAGE_COUNTS?.[category.categoryId],
+        size: category.categoryId === 7 ? 75 : 65,
+        minSize: 55,
+        grow: false,
+        enableSorting: false,
+        enableColumnFilter: false,
+        enableColumnActions: false,
+        enableColumnOrdering: false,
+        muiTableHeadCellProps: { align: 'center' },
+        muiTableBodyCellProps: { align: 'center' },
+        Cell: ({ row }) => (
+          <DocumentStatusIndicator
+            categoryId={category.categoryId}
+            name={category.name}
+            pageCount={
+              row.original.DOCUMENT_PAGE_COUNTS
+                ? (row.original.DOCUMENT_PAGE_COUNTS[category.categoryId] ?? 0)
+                : undefined
+            }
+          />
+        )
+      })),
       {
         accessorKey: 'UPDATE_DATE',
         header: 'UPDATE DATE',
         size: 190,
+        minSize: 190,
         enableColumnFilter: false,
         Cell: ({ row }) => new Date(row.original.UPDATE_DATE).toLocaleString('en-GB')
       },
@@ -138,6 +194,7 @@ const MergePdfSearchResult = ({ onOpen, onAdd, refreshVersion }: Props) => {
         accessorKey: 'UPDATE_BY',
         header: 'UPDATE BY',
         size: 160,
+        minSize: 160,
         filterVariant: 'text',
         columnFilterModeOptions: ['contains'],
         filterFn: 'contains'
@@ -215,7 +272,8 @@ const MergePdfSearchResult = ({ onOpen, onAdd, refreshVersion }: Props) => {
                 setOpenModalDelete={setOpenDelete}
                 MENU_ID={MENU_ID}
                 isNeedViewEyeIcon
-                isNeedDelete={row.original.STATUS === 'DRAFT'}
+                isNeedEdit={row.original.STATUS !== 'COMPLETING'}
+                isNeedDelete={row.original.STATUS !== 'COMPLETING'}
                 handleClickOpenModalView={selected => {
                   setRowSelected(selected)
                   setOpenView(true)
@@ -249,6 +307,7 @@ const MergePdfSearchResult = ({ onOpen, onAdd, refreshVersion }: Props) => {
           }}
         />
       )}
+      {previewJob && <MergePdfPreviewModal open job={previewJob} onClose={() => setPreviewJob(null)} />}
     </>
   )
 }

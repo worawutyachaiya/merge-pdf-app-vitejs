@@ -95,6 +95,7 @@ const MergePdfPage = () => {
   const [jumpPosition, setJumpPosition] = useState('')
   const [draggedPageId, setDraggedPageId] = useState<number | null>(null)
   const lastSyncedJobId = useRef<number | null>(null)
+  const editorStartVersion = useRef<number | null>(null)
   const listScrollPosition = useRef(0)
   const detailQuery = useMergePdfDetail(selectedJobId)
   const actions = useMergePdfActions()
@@ -115,11 +116,10 @@ const MergePdfPage = () => {
     })
   )
   const {
-    register,
     handleSubmit,
     reset,
     getValues,
-    formState: { errors, isDirty }
+    formState: { isDirty }
   } = useForm<MergePdfFormValues>({
     resolver: zodResolver(mergePdfFormSchema),
     defaultValues: mergePdfFormDefaults
@@ -127,6 +127,7 @@ const MergePdfPage = () => {
 
   useEffect(() => {
     if (detail && (lastSyncedJobId.current !== detail.job.JOB_ID || !isDirty)) {
+      if (lastSyncedJobId.current !== detail.job.JOB_ID) editorStartVersion.current = detail.job.ROW_VERSION
       reset({ title: detail.job.JOB_TITLE })
       lastSyncedJobId.current = detail.job.JOB_ID
     }
@@ -145,6 +146,12 @@ const MergePdfPage = () => {
     detail.documents
       .filter(document => importEntryDocumentIds.has(document.DOCUMENT_ID))
       .every(document => document.ENTRY_STATUS_CODE === '04')
+  const hasCompleted =
+    !!detail &&
+    (detail.job.STATUS === 'COMPLETED' ||
+      !!detail.job.LAST_COMPLETED_AT ||
+      detail.publications.some(publication => publication.STATUS === 'PUBLISHED'))
+  const currentPublication = detail?.publications.find(publication => publication.STATUS === 'PUBLISHED')
   const activeCheckedIds = checkedPageIds.filter(id => detail?.pages.some(page => page.PAGE_ID === id))
   const maxBulkPosition = (detail?.pages.length ?? 0) - activeCheckedIds.length + 1
   const categoryOptions = MERGE_PDF_CATEGORIES.map(category => ({ value: category.id, label: category.name }))
@@ -218,7 +225,9 @@ const MergePdfPage = () => {
 
   const returnToResults = () => {
     if (busy) return
-    if (detail && isDirty) void saveDraft()
+    if (detail && hasCompleted && (isDirty || detail.job.ROW_VERSION !== editorStartVersion.current)) {
+      setConfirmAction({ kind: 'complete' })
+    } else if (detail && isDirty) void saveDraft()
     else closeEditor()
   }
 
@@ -368,16 +377,12 @@ const MergePdfPage = () => {
         if (!detail || confirmAction === null) return
         if (confirmAction.kind === 'complete') {
           const values = mergePdfFormSchema.parse(getValues())
-          const saved = firstDetail(
-            await actions.saveDraft.mutateAsync({
+          firstDetail(
+            await actions.complete.mutateAsync({
               jobId: detail.job.JOB_ID,
               rowVersion: detail.job.ROW_VERSION,
-              title: values.title,
-              reference: detail.job.JOB_REFERENCE
+              fields: { title: values.title, reference: detail.job.JOB_REFERENCE }
             })
-          )
-          firstDetail(
-            await actions.complete.mutateAsync({ jobId: detail.job.JOB_ID, rowVersion: saved.job.ROW_VERSION })
           )
           closeEditor()
         } else if (confirmAction.kind === 'document') {
@@ -403,13 +408,25 @@ const MergePdfPage = () => {
         }
         setConfirmAction(null)
       },
-      confirmAction?.kind === 'complete' ? 'Merged PDF saved and completed' : 'Removed from draft'
+      confirmAction?.kind === 'complete' ? 'Merged PDF saved' : 'Removed from document'
     )
 
   const download = (publicationId: number, fileName: string) =>
     run(async () => {
       if (!detail) return
       const response = await MergePdfServices.download(detail.job.JOB_ID, publicationId)
+      const url = URL.createObjectURL(response.data)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = fileName
+      link.click()
+      window.setTimeout(() => URL.revokeObjectURL(url), 1000)
+    })
+
+  const downloadSource = (documentId: number, fileName: string) =>
+    run(async () => {
+      if (!detail) return
+      const response = await MergePdfServices.source(detail.job.JOB_ID, documentId)
       const url = URL.createObjectURL(response.data)
       const link = document.createElement('a')
       link.href = url
@@ -476,19 +493,18 @@ const MergePdfPage = () => {
                   <Grid size={{ xs: 12, md: 7 }}>
                     <CustomTextField
                       label='Document name'
-                      placeholder='Enter ...'
-                      autoComplete='off'
+                      placeholder='Generated automatically when the draft is created'
                       fullWidth
-                      {...register('title')}
-                      error={!!errors.title}
-                      helperText={errors.title?.message}
+                      value={detail ? (/^I\d{2}-\d{4,}$/.test(detail.job.JOB_CODE) ? detail.job.JOB_CODE : detail.job.JOB_TITLE) : ''}
+                      slotProps={{ input: { readOnly: true } }}
                     />
                   </Grid>
-                  {!detail && editorMode === 'Add' && (
-                    <Grid size={12}>
-                      <Typography color='text.secondary'>
-                        Enter a document name and create a draft to start importing and arranging pages.
-                      </Typography>
+                  {currentPublication && (
+                    <Grid size={{ xs: 12, md: 5 }} sx={{ display: 'flex', alignItems: 'center' }}>
+                      <Button variant='outlined' disabled={busy}
+                        onClick={() => void download(currentPublication.PUBLICATION_ID, currentPublication.OUTPUT_FILE_NAME)}>
+                        Download {currentPublication.OUTPUT_FILE_NAME}
+                      </Button>
                     </Grid>
                   )}
                 </Grid>
@@ -719,12 +735,16 @@ const MergePdfPage = () => {
                   <CardContent>
                     <Stack spacing={2}>
                       {detail.documents.map(document => (
-                        <Box key={document.DOCUMENT_ID} sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                          <Typography sx={{ flex: 1 }}>
+                        <Box key={document.DOCUMENT_ID} sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap' }}>
+                          <Typography sx={{ flex: 1, minWidth: 200, overflowWrap: 'anywhere' }}>
                             {document.CATEGORY_ID === 10 ? 'Other / mixed file' : document.CATEGORY_NAME}:{' '}
                             {document.ORIGINAL_FILE_NAME} ({document.PDF_PAGE_COUNT} page(s))
                             {document.ENTRY_STATUS_CODE === '04' ? ' · Status 04 confirmed' : ''}
                           </Typography>
+                          <Button size='small' disabled={busy}
+                            onClick={() => void downloadSource(document.DOCUMENT_ID, document.ORIGINAL_FILE_NAME)}>
+                            Download source
+                          </Button>
                           {importEntryDocumentIds.has(document.DOCUMENT_ID) && (
                             <Button
                               size='small'
@@ -746,29 +766,6 @@ const MergePdfPage = () => {
                           </Button>
                         </Box>
                       ))}
-                    </Stack>
-                  </CardContent>
-                </Card>
-                <Card>
-                  <CardHeader title='Completed PDFs' titleTypographyProps={{ variant: 'h5' }} />
-                  <CardContent>
-                    <Stack spacing={2}>
-                      {detail.publications
-                        .filter(publication => publication.STATUS === 'PUBLISHED')
-                        .map(publication => (
-                          <Box key={publication.PUBLICATION_ID} sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                            <Typography sx={{ flex: 1 }}>
-                              Version {publication.PUBLICATION_VERSION} · {publication.OUTPUT_FILE_NAME}
-                            </Typography>
-                            <Button
-                              variant='outlined'
-                              onClick={() => void download(publication.PUBLICATION_ID, publication.OUTPUT_FILE_NAME)}
-                            >
-                              Download
-                            </Button>
-                          </Box>
-                        ))}
-                      {detail.publications.length === 0 && <Typography>No completed PDFs yet</Typography>}
                     </Stack>
                   </CardContent>
                 </Card>
@@ -797,18 +794,21 @@ const MergePdfPage = () => {
             {detail ? (
               <>
                 <Typography variant='body2' sx={{ mr: 'auto' }}>
-                  {detail.pages.length} pages · File and page changes save automatically
+                  {detail.pages.length} pages ·{' '}
+                  {hasCompleted ? 'Save Changes updates the shared PDF' : 'File and page changes save automatically'}
                 </Typography>
-                <Button variant='contained' disabled={busy} onClick={saveDraft}>
-                  Save Draft &amp; Return
-                </Button>
+                {!hasCompleted && (
+                  <Button variant='contained' disabled={busy} onClick={saveDraft}>
+                    Save Draft &amp; Return
+                  </Button>
+                )}
                 <Button
                   variant='contained'
                   color='success'
                   disabled={busy || !canComplete}
                   onClick={() => setConfirmAction({ kind: 'complete' })}
                 >
-                  Save &amp; Complete
+                  {hasCompleted ? 'Save Changes' : 'Save & Complete'}
                 </Button>
               </>
             ) : (
@@ -996,7 +996,9 @@ const MergePdfPage = () => {
       >
         <DialogTitle>
           {confirmAction?.kind === 'complete'
-            ? 'Save & Complete'
+            ? hasCompleted
+              ? 'Save Changes'
+              : 'Save & Complete'
             : confirmAction?.kind === 'page'
               ? 'Remove page'
               : 'Remove document'}
@@ -1004,20 +1006,22 @@ const MergePdfPage = () => {
         <DialogContent>
           <Typography>
             {confirmAction?.kind === 'complete'
-              ? 'Merge the pages in this order and save the PDF to the development shared folder?'
+              ? hasCompleted
+                ? `Save changes to ${currentPublication?.OUTPUT_FILE_NAME ?? detail?.job.JOB_CODE} at the same shared path?`
+                : 'Merge the pages in this order and save the PDF to the shared folder?'
               : confirmAction?.kind === 'page'
-                ? 'Remove this page from the current draft?'
-                : 'Remove this document and all of its pages from the current draft?'}
+                ? 'Remove this page from this document?'
+                : 'Remove this source document and all of its pages?'}
           </Typography>
         </DialogContent>
         <DialogActions>
           <Button
             variant='contained'
             color={confirmAction?.kind === 'complete' ? 'success' : 'error'}
-            disabled={busy}
+            disabled={busy || (confirmAction?.kind === 'complete' && !canComplete)}
             onClick={() => void confirm()}
           >
-            {confirmAction?.kind === 'complete' ? 'Save & Complete' : 'Remove'}
+            {confirmAction?.kind === 'complete' ? (hasCompleted ? 'Save Changes' : 'Save & Complete') : 'Remove'}
           </Button>
           <Button variant='tonal' color='secondary' disabled={busy} onClick={() => setConfirmAction(null)}>
             Close

@@ -5,9 +5,10 @@ import type AxiosResponseI from '@/libs/axios/types/AxiosResponseInterface'
 import UserProfileSettingProgramServices from '@/services/common-system/UserProfileSettingProgramServices'
 import type { UserProfileSettingProgramI } from '@/types/common-system/UserProfileSettingProgram'
 import { getUserData } from '@/utils/user-profile/userLoginProfile'
+import { documentStatusColumnIds } from './documentStatus'
 
 export const mergePdfFormSchema = z.object({
-  title: z.string().trim().min(1, 'Enter a document name').max(255)
+  title: z.string().trim().max(255)
 })
 export type MergePdfFormValues = z.infer<typeof mergePdfFormSchema>
 export const mergePdfFormDefaults: MergePdfFormValues = { title: '' }
@@ -20,9 +21,11 @@ export const mergePdfStatusOptions = [
 const columns = [
   'mrt-row-actions',
   'STATUS',
+  'OUTPUT_FILE_NAME',
   'JOB_TITLE',
   'DOCUMENT_COUNT',
   'PAGE_COUNT',
+  ...documentStatusColumnIds,
   'UPDATE_DATE',
   'UPDATE_BY'
 ] as const
@@ -86,6 +89,18 @@ export const fetchMergePdfListValues = async (menuId: number): Promise<MergePdfL
 
     const currentColumns = new Set<string>(columns)
     const savedOrder = saved.searchResults?.columnOrder ?? []
+    const columnOrder = [
+      ...savedOrder.filter(
+        column =>
+          currentColumns.has(column) && column !== 'OUTPUT_FILE_NAME' && !documentStatusColumnIds.includes(column)
+      ),
+      ...columns.filter(
+        column =>
+          !savedOrder.includes(column) && column !== 'OUTPUT_FILE_NAME' && !documentStatusColumnIds.includes(column)
+      )
+    ]
+    columnOrder.splice(columnOrder.indexOf('STATUS') + 1, 0, 'OUTPUT_FILE_NAME')
+    columnOrder.splice(columnOrder.indexOf('PAGE_COUNT') + 1, 0, ...documentStatusColumnIds)
     return {
       searchFilters: { ...defaults.searchFilters, ...saved.searchFilters },
       searchResults: {
@@ -94,10 +109,7 @@ export const fetchMergePdfListValues = async (menuId: number): Promise<MergePdfL
         columnFilters: (saved.searchResults?.columnFilters ?? []).filter((filter: { id: string }) =>
           currentColumns.has(filter.id)
         ),
-        columnOrder: [
-          ...savedOrder.filter(column => currentColumns.has(column)),
-          ...columns.filter(column => !savedOrder.includes(column))
-        ],
+        columnOrder,
         columnVisibility: Object.fromEntries(
           columns.map(column => [column, saved.searchResults?.columnVisibility?.[column] ?? true])
         ),

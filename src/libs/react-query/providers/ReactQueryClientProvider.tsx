@@ -21,10 +21,10 @@ export const ReactQueryClientProvider = ({ children }: React.PropsWithChildren) 
         }
       },
       queryCache: new QueryCache({
-        onError: e =>
-          ToastMessageError({
-            message: e.message
-          })
+        onError: (e, query) => {
+          if (query.meta?.suppressErrorToast) return
+          ToastMessageError({ message: e.message })
+        }
       })
     })
   )

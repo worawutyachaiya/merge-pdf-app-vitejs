@@ -45,7 +45,17 @@ export const useMergePdfPageThumbnail = (jobId: number, pageId: number, rotation
   useQuery({
     queryKey: [key, 'page-thumbnail', jobId, pageId, rotation],
     queryFn: async ({ signal }) => (await MergePdfServices.pageThumbnail(jobId, pageId, signal)).data,
+    meta: { suppressErrorToast: true },
     enabled,
+    staleTime: 300_000,
+    retry: 1
+  })
+
+export const useMergePdfPublicationPreview = (jobId: number | null, publicationId: number | null) =>
+  useQuery({
+    queryKey: [key, 'publication-preview', jobId, publicationId],
+    queryFn: async ({ signal }) => (await MergePdfServices.download(jobId ?? 0, publicationId ?? 0, signal)).data,
+    enabled: jobId !== null && publicationId !== null,
     staleTime: 300_000,
     retry: 1
   })
@@ -63,9 +73,9 @@ export const useMergePdfActions = () => {
   }
   return {
     create: useMutation({ mutationFn: MergePdfServices.create, onSuccess: accept }),
-    deleteDraft: useMutation({
+    deleteJob: useMutation({
       mutationFn: async (input: { jobId: number; rowVersion: number }) => {
-        const response = await MergePdfServices.deleteDraft(input.jobId, input.rowVersion)
+        const response = await MergePdfServices.deleteJob(input.jobId, input.rowVersion)
         if (!response.data.Status) throw new Error(response.data.Message)
         return response
       },
@@ -127,8 +137,11 @@ export const useMergePdfActions = () => {
       onSuccess: accept
     }),
     complete: useMutation({
-      mutationFn: (input: { jobId: number; rowVersion: number }) =>
-        MergePdfServices.complete(input.jobId, input.rowVersion),
+      mutationFn: (input: {
+        jobId: number
+        rowVersion: number
+        fields?: { title: string; reference: string | null }
+      }) => MergePdfServices.complete(input.jobId, input.rowVersion, input.fields),
       onSuccess: accept,
       // A failed publication can change the job version. Refresh it before retrying.
       onError: async (_error, input) => {
