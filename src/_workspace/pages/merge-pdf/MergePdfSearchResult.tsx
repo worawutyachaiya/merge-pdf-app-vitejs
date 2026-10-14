@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 
 import AddIcon from '@mui/icons-material/Add'
 import { Button, Card, CardHeader, Chip } from '@mui/material'
+import dayjs from 'dayjs'
 import type {
   MRT_ColumnDef,
   MRT_ColumnFilterFnsState,
@@ -188,7 +189,7 @@ const MergePdfSearchResult = ({ onOpen, onAdd, refreshVersion }: Props) => {
         size: 190,
         minSize: 190,
         enableColumnFilter: false,
-        Cell: ({ row }) => new Date(row.original.UPDATE_DATE).toLocaleString('en-GB')
+        Cell: ({ row }) => dayjs(row.original.UPDATE_DATE).format('DD-MMM-YYYY HH:mm:ss')
       },
       {
         accessorKey: 'UPDATE_BY',

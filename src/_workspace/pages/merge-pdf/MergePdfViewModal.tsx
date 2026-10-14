@@ -10,6 +10,7 @@ import {
   Grid,
   Typography
 } from '@mui/material'
+import dayjs from 'dayjs'
 
 import type { MergePdfJob } from '@/_workspace/types/merge-pdf/MergePdf'
 import { useMergePdfDetail } from '@/_workspace/react-query/hooks/useMergePdf'
@@ -79,7 +80,7 @@ const MergePdfViewModal = ({ open, job, onClose }: Props) => {
               fullWidth
               disabled
               label='Last Updated'
-              value={currentJob ? new Date(currentJob.UPDATE_DATE).toLocaleString('en-GB') : ''}
+              value={currentJob ? dayjs(currentJob.UPDATE_DATE).format('DD-MMM-YYYY HH:mm:ss') : ''}
             />
           </Grid>
           <Grid size={12}>

@@ -17,7 +17,13 @@ export const updateDraftPages = (detail: MergePdfDetail, ids: number[], action: 
       return page
     })
     .map((page, index) => ({ ...page, SORT_ORDER: index + 1 }))
-  const documents = detail.documents.filter(doc => pages.some(page => page.DOCUMENT_ID === doc.DOCUMENT_ID))
+  const documents = detail.documents
+    .filter(doc => pages.some(page => page.DOCUMENT_ID === doc.DOCUMENT_ID))
+    .map(doc =>
+      pages.some(page => page.DOCUMENT_ID === doc.DOCUMENT_ID && page.CATEGORY_ID === 1)
+        ? doc
+        : { ...doc, ENTRY_STATUS_CODE: null, ENTRY_STATUS_SOURCE: null }
+    )
   return {
     ...detail,
     pages,

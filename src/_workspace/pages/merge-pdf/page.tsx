@@ -398,7 +398,7 @@ const MergePdfPage = () => {
         const input = document.getElementById('merge-pdf-file-input') as HTMLInputElement | null
         if (input) input.value = ''
       }
-    }, 'Files added; save to keep changes')
+    })
   const changePageCategory = (pageId: number, nextCategoryId: number) =>
     run(async () => {
       if (!detail) return
@@ -410,7 +410,7 @@ const MergePdfPage = () => {
           categoryId: nextCategoryId
         })
       )
-    }, 'Page type updated')
+    })
 
   const rotatePage = (pageId: number, delta: 90 | 270) =>
     run(async () => {
@@ -423,7 +423,7 @@ const MergePdfPage = () => {
           delta
         })
       )
-    }, 'Page rotated')
+    })
 
   const updateCheckedPages = (action: Parameters<typeof MergePdfServices.batchPages>[3]) =>
     run(
@@ -437,8 +437,7 @@ const MergePdfPage = () => {
             action
           })
         )
-      },
-      action.kind === 'category' ? 'Selected page types updated' : 'Selected pages rotated'
+      }
     )
 
   const sortByCategory = () => {
@@ -454,7 +453,7 @@ const MergePdfPage = () => {
           pageIds
         })
       )
-    }, 'Pages sorted by document type')
+    })
   }
 
   const movePage = () => {
@@ -475,7 +474,7 @@ const MergePdfPage = () => {
         })
       )
       setMovePosition('')
-    }, 'Page order updated')
+    })
   }
 
   const moveCheckedPages = () => {
@@ -502,7 +501,7 @@ const MergePdfPage = () => {
           .getElementById(`merge-pdf-page-${ids[position - 1]}`)
           ?.scrollIntoView({ block: 'center', behavior: 'smooth' })
       )
-    }, 'Selected pages moved')
+    })
   }
 
   const onDragEnd = (event: DragEndEvent) => {
@@ -521,7 +520,7 @@ const MergePdfPage = () => {
           pageIds: ids
         })
       )
-    }, 'Page order updated')
+    })
   }
 
   const confirm = () =>
@@ -568,7 +567,11 @@ const MergePdfPage = () => {
         }
         setConfirmAction(null)
       },
-      confirmAction?.kind === 'complete' ? 'Merged PDF saved' : 'Removed from document'
+      confirmAction?.kind === 'complete'
+        ? 'Merged PDF saved'
+        : confirmAction?.kind === 'document'
+          ? 'Source document removed from current edits. Save to apply.'
+          : 'Page(s) removed from current edits. Save to apply.'
     )
 
   const download = (publicationId: number, fileName: string) =>
@@ -611,7 +614,11 @@ const MergePdfPage = () => {
         })
       )
       setStatusEditId(null)
-    }, 'Import entry status saved')
+    },
+    detail?.documents.find(document => document.DOCUMENT_ID === statusEditId)?.ENTRY_STATUS_CODE === '04'
+      ? 'Status 04 cleared in current edits. Save to apply.'
+      : 'Status 04 confirmed in current edits. Save to apply.'
+  )
 
   const onFilesChange = (event: ChangeEvent<HTMLInputElement>) => setFiles(Array.from(event.target.files ?? []))
 
@@ -1113,7 +1120,7 @@ const MergePdfPage = () => {
               <>
                 <Typography variant='body2' sx={{ mr: 'auto' }}>
                   {detail.pages.length} pages ·{' '}
-                  {hasCompleted ? 'Save Changes updates the shared PDF' : 'File and page changes save automatically'}
+                  {hasCompleted ? 'Save Changes updates the shared PDF' : 'Changes are saved when you choose Save'}
                 </Typography>
                 {!hasCompleted && (
                   <Button variant='contained' disabled={busy} onClick={saveDraft}>
