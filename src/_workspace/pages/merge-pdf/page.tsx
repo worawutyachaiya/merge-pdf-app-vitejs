@@ -145,7 +145,6 @@ const MergePdfPage = () => {
     detail.documents
       .filter(document => importEntryDocumentIds.has(document.DOCUMENT_ID))
       .every(document => document.ENTRY_STATUS_CODE === '04')
-  const unknownPageCount = detail?.pages.filter(page => page.CLASSIFICATION_SOURCE === 'UNKNOWN').length ?? 0
   const activeCheckedIds = checkedPageIds.filter(id => detail?.pages.some(page => page.PAGE_ID === id))
   const maxBulkPosition = (detail?.pages.length ?? 0) - activeCheckedIds.length + 1
   const categoryOptions = MERGE_PDF_CATEGORIES.map(category => ({ value: category.id, label: category.name }))
@@ -492,20 +491,6 @@ const MergePdfPage = () => {
                       </Typography>
                     </Grid>
                   )}
-                  {detail && (
-                    <Grid size={12}>
-                      <Alert severity='info'>
-                        Files, page order, rotation, document types and status confirmation save automatically. The
-                        document name is saved when you leave the editor or complete the document.
-                      </Alert>
-                      {!canComplete && (
-                        <Alert severity='warning' sx={{ mt: 2 }}>
-                          To complete: add Import entry, Invoice and HAWB or AWB pages, then confirm status 04 for the
-                          Import entry.
-                        </Alert>
-                      )}
-                    </Grid>
-                  )}
                 </Grid>
               </CardContent>
             </Card>
@@ -563,23 +548,6 @@ const MergePdfPage = () => {
                           />
                         </Button>
                       </Grid>
-                      {importMode === 'combined' && (
-                        <Grid size={12}>
-                          <Alert severity='info'>
-                            Import a PDF with mixed pages, preview each page, then drag pages into order. Select the
-                            document type for required pages before completing.
-                          </Alert>
-                        </Grid>
-                      )}
-                      {importMode === 'manual' && (
-                        <Grid size={12}>
-                          <Alert severity='info'>
-                            Excel is converted to PDF using saved cell values. Save the workbook in Excel first and
-                            review the converted pages. Fonts are normalized to Tahoma; .xls uses a basic table layout.
-                            For charts or complex layouts, export PDF from Excel before importing.
-                          </Alert>
-                        </Grid>
-                      )}
                       <Grid size={12}>
                         <Button
                           variant='contained'
@@ -593,12 +561,6 @@ const MergePdfPage = () => {
                     </Grid>
                   </CardContent>
                 </Card>
-                {unknownPageCount > 0 && (
-                  <Alert severity='warning'>
-                    {unknownPageCount} page(s) in combined files have no document type yet. Select a page to set its
-                    type when needed.
-                  </Alert>
-                )}
                 <Card sx={{ overflow: 'visible' }}>
                   <CardHeader
                     title={`Pages (${detail.pages.length})`}

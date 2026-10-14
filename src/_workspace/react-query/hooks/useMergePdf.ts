@@ -129,7 +129,12 @@ export const useMergePdfActions = () => {
     complete: useMutation({
       mutationFn: (input: { jobId: number; rowVersion: number }) =>
         MergePdfServices.complete(input.jobId, input.rowVersion),
-      onSuccess: accept
+      onSuccess: accept,
+      // A failed publication can change the job version. Refresh it before retrying.
+      onError: async (_error, input) => {
+        await queryClient.invalidateQueries({ queryKey: [key, 'detail', input.jobId] })
+        await queryClient.invalidateQueries({ queryKey: [key, 'jobs'] })
+      }
     })
   }
 }
