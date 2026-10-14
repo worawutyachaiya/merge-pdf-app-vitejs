@@ -1,11 +1,12 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
-import { MergePdfServices } from '@/_workspace/services/merge-pdf/MergePdfServices'
+import MergePdfServices from '@/_workspace/services/merge-pdf/MergePdfServices'
 import type { MergePdfDetail } from '@/_workspace/types/merge-pdf/MergePdf'
 import type { ResultDataResponseI } from '@/libs/axios/types/AxiosResponseInterface'
 import type { AxiosResponse } from 'axios'
 
-const key = 'MERGE_PDF'
+export const PREFIX_QUERY_KEY = 'MERGE_PDF'
+const key = PREFIX_QUERY_KEY
 export const useMergePdfNextCode = (enabled: boolean) =>
   useQuery({
     queryKey: [key, 'next-code'],

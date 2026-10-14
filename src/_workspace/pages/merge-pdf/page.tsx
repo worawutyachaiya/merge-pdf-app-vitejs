@@ -43,7 +43,7 @@ import {
   useMergePdfNextCode,
   useMergePdfPagePreview
 } from '@/_workspace/react-query/hooks/useMergePdf'
-import { MergePdfServices } from '@/_workspace/services/merge-pdf/MergePdfServices'
+import MergePdfServices from '@/_workspace/services/merge-pdf/MergePdfServices'
 import {
   MERGE_PDF_CATEGORIES,
   REQUIRED_MERGE_PDF_CATEGORY_IDS,
@@ -426,19 +426,17 @@ const MergePdfPage = () => {
     })
 
   const updateCheckedPages = (action: Parameters<typeof MergePdfServices.batchPages>[3]) =>
-    run(
-      async () => {
-        if (!detail || !activeCheckedIds.length) return
-        firstDetail(
-          await actions.batchPages.mutateAsync({
-            jobId: detail.job.JOB_ID,
-            rowVersion: detail.job.ROW_VERSION,
-            pageIds: activeCheckedIds,
-            action
-          })
-        )
-      }
-    )
+    run(async () => {
+      if (!detail || !activeCheckedIds.length) return
+      firstDetail(
+        await actions.batchPages.mutateAsync({
+          jobId: detail.job.JOB_ID,
+          rowVersion: detail.job.ROW_VERSION,
+          pageIds: activeCheckedIds,
+          action
+        })
+      )
+    })
 
   const sortByCategory = () => {
     if (!detail) return
@@ -600,25 +598,26 @@ const MergePdfPage = () => {
     })
 
   const saveEntryStatus = () =>
-    run(async () => {
-      if (!detail || statusEditId === null) return
-      firstDetail(
-        await actions.updateEntryStatus.mutateAsync({
-          jobId: detail.job.JOB_ID,
-          documentId: statusEditId,
-          rowVersion: detail.job.ROW_VERSION,
-          statusCode:
-            detail.documents.find(document => document.DOCUMENT_ID === statusEditId)?.ENTRY_STATUS_CODE === '04'
-              ? null
-              : '04'
-        })
-      )
-      setStatusEditId(null)
-    },
-    detail?.documents.find(document => document.DOCUMENT_ID === statusEditId)?.ENTRY_STATUS_CODE === '04'
-      ? 'Status 04 cleared in current edits. Save to apply.'
-      : 'Status 04 confirmed in current edits. Save to apply.'
-  )
+    run(
+      async () => {
+        if (!detail || statusEditId === null) return
+        firstDetail(
+          await actions.updateEntryStatus.mutateAsync({
+            jobId: detail.job.JOB_ID,
+            documentId: statusEditId,
+            rowVersion: detail.job.ROW_VERSION,
+            statusCode:
+              detail.documents.find(document => document.DOCUMENT_ID === statusEditId)?.ENTRY_STATUS_CODE === '04'
+                ? null
+                : '04'
+          })
+        )
+        setStatusEditId(null)
+      },
+      detail?.documents.find(document => document.DOCUMENT_ID === statusEditId)?.ENTRY_STATUS_CODE === '04'
+        ? 'Status 04 cleared in current edits. Save to apply.'
+        : 'Status 04 confirmed in current edits. Save to apply.'
+    )
 
   const onFilesChange = (event: ChangeEvent<HTMLInputElement>) => setFiles(Array.from(event.target.files ?? []))
 
