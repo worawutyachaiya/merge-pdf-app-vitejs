@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   DndContext,
   DragOverlay,
@@ -35,6 +35,7 @@ import {
   Typography
 } from '@mui/material'
 import { useForm } from 'react-hook-form'
+import { useDropzone } from 'react-dropzone'
 
 import DxBreadCrumbs from '@/_template/DxBreadCrumbs'
 import {
@@ -89,15 +90,20 @@ type Confirmation =
   | { kind: 'pages'; ids: number[] }
   | null
 
+interface ImportFile {
+  id: number
+  file: File
+  categoryId: number
+}
+
 const MergePdfPage = () => {
   const [selectedJobId, setSelectedJobId] = useState<number | null>(null)
   const [editorMode, setEditorMode] = useState<'Add' | 'Edit' | null>(null)
   const [refreshVersion, setRefreshVersion] = useState(0)
   const [createConfirmOpen, setCreateConfirmOpen] = useState(false)
   const [selectedPageId, setSelectedPageId] = useState<number | null>(null)
-  const [categoryId, setCategoryId] = useState(1)
   const [importMode, setImportMode] = useState<'manual' | 'combined'>('manual')
-  const [files, setFiles] = useState<File[]>([])
+  const [files, setFiles] = useState<ImportFile[]>([])
   const [busy, setBusy] = useState(false)
   const [confirmAction, setConfirmAction] = useState<Confirmation>(null)
   const [previewOpen, setPreviewOpen] = useState(false)
@@ -120,6 +126,7 @@ const MergePdfPage = () => {
     {}
   )
   const temporaryId = useRef(-1)
+  const nextImportFileId = useRef(0)
   const detail = workingDetail ?? detailQuery.data?.data.ResultOnDb[0]
   const changeDraft = (change: (current: MergePdfDetail) => MergePdfDetail) => {
     const current = draftRef.current ?? detail
@@ -309,7 +316,6 @@ const MergePdfPage = () => {
     setBulkPosition('')
     setJumpPosition('')
     setMovePosition('')
-    setCategoryId(1)
     setImportMode('manual')
     setFiles([])
     setPreviewOpen(false)
@@ -344,14 +350,15 @@ const MergePdfPage = () => {
       if (!detail || !files.length) return
       let completed = 0
       try {
-        for (const file of files) {
+        for (const upload of files) {
+          const { file } = upload
           const response = await MergePdfServices.prepareFile(file, importMode === 'combined')
           const prepared = response.data.ResultOnDb[0]
           if (!response.data.Status || !prepared) throw new Error(response.data.Message)
           if ((draftRef.current ?? detail).pages.length + prepared.pageCount > 500)
             throw new Error('Document exceeds 500 pages')
           const documentId = temporaryId.current--
-          const documentCategory = importMode === 'combined' ? 10 : categoryId
+          const documentCategory = importMode === 'combined' ? 10 : upload.categoryId
           const pages = Array.from({ length: prepared.pageCount }, (_, index) => ({
             PAGE_ID: temporaryId.current--,
             DOCUMENT_ID: documentId,
@@ -621,7 +628,46 @@ const MergePdfPage = () => {
         : 'Status 04 confirmed in current edits. Save to apply.'
     )
 
-  const onFilesChange = (event: ChangeEvent<HTMLInputElement>) => setFiles(Array.from(event.target.files ?? []))
+  const { getRootProps, getInputProps, isDragActive } = useDropzone({
+    accept:
+      importMode === 'combined'
+        ? { 'application/pdf': ['.pdf'] }
+        : {
+            'application/pdf': ['.pdf'],
+            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': ['.xlsx'],
+            'application/vnd.ms-excel': ['.xls'],
+            'image/png': ['.png'],
+            'image/jpeg': ['.jpg', '.jpeg'],
+            'image/webp': ['.webp'],
+            'image/tiff': ['.tif', '.tiff']
+          },
+    disabled: busy,
+    multiple: true,
+    onDrop: (acceptedFiles, fileRejections) => {
+      if (acceptedFiles.length) {
+        setFiles(current => [
+          ...current,
+          ...acceptedFiles.map(file => ({
+            id: nextImportFileId.current++,
+            file,
+            categoryId: 1
+          }))
+        ])
+      }
+      if (fileRejections.length) {
+        const names = fileRejections
+          .slice(0, 3)
+          .map(rejection => rejection.file.name)
+          .join(', ')
+        const remaining = fileRejections.length > 3 ? ` and ${fileRejections.length - 3} more` : ''
+        ToastMessageError({
+          message: `${names}${remaining} could not be added. ${
+            importMode === 'combined' ? 'Only PDF files are supported.' : 'Use PDF, Excel or image files.'
+          }`
+        })
+      }
+    }
+  })
 
   return (
     <Grid container spacing={6}>
@@ -648,7 +694,8 @@ const MergePdfPage = () => {
               Back to results
             </Button>
             <Typography variant='h5'>
-              {editorMode} Merge PDF{detail ? ` · ${detail.job.JOB_TITLE}` : ''}
+              {/* {editorMode} Merge PDF{detail ? ` · ${detail.job.JOB_TITLE}` : ''} */}
+              {editorMode} Merge PDF{detail ? '' : ''}
             </Typography>
           </Box>
           <Stack spacing={6}>
@@ -719,57 +766,174 @@ const MergePdfPage = () => {
                   <CardContent>
                     <Tabs
                       value={importMode}
+                      aria-label='Import mode'
                       onChange={(_, value) => {
                         setImportMode(value)
                         setFiles([])
                       }}
                       sx={{ mb: 4 }}
                     >
-                      <Tab value='manual' label='Choose document type' />
-                      <Tab value='combined' label='Combined file' />
+                      <Tab value='manual' label='Choose document type' disabled={busy} />
+                      <Tab value='combined' label='Combined file' disabled={busy} />
                     </Tabs>
-                    <Grid container spacing={4} alignItems='flex-end'>
-                      {importMode === 'manual' && (
-                        <Grid size={{ xs: 12, md: 5 }}>
-                          <SelectCustom
-                            inputId='merge-pdf-document-type'
-                            name='documentType'
-                            label='Document type'
-                            placeholder='Select ...'
-                            classNamePrefix='select'
-                            options={categoryOptions}
-                            value={categoryOptions.find(option => option.value === categoryId)}
-                            onChange={option => setCategoryId(option?.value ?? 1)}
-                          />
-                        </Grid>
+                    <Stack spacing={4}>
+                      <Box
+                        {...getRootProps()}
+                        sx={{
+                          width: '100%',
+                          minHeight: 148,
+                          p: { xs: 3, sm: 4 },
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          textAlign: 'center',
+                          border: '2px dashed',
+                          borderColor: isDragActive ? 'primary.main' : 'divider',
+                          borderRadius: 2,
+                          bgcolor: isDragActive ? 'action.hover' : 'background.default',
+                          cursor: busy ? 'default' : 'pointer',
+                          transition: theme =>
+                            theme.transitions.create(['border-color', 'background-color', 'box-shadow']),
+                          ...(isDragActive && { boxShadow: theme => `0 0 0 3px ${theme.palette.primary.main}22` }),
+                          '&:hover': {
+                            borderColor: busy ? 'divider' : 'primary.main',
+                            bgcolor: busy ? 'background.default' : 'action.hover'
+                          },
+                          '&:focus-visible': {
+                            outline: '2px solid',
+                            outlineColor: 'primary.main',
+                            outlineOffset: 2
+                          }
+                        }}
+                      >
+                        <input {...getInputProps({ id: 'merge-pdf-file-input' })} />
+                        <Stack spacing={1} alignItems='center'>
+                          <Box
+                            sx={{
+                              width: 44,
+                              height: 44,
+                              display: 'grid',
+                              placeItems: 'center',
+                              borderRadius: '50%',
+                              color: 'primary.main',
+                              bgcolor: 'action.hover'
+                            }}
+                          >
+                            <i className={isDragActive ? 'tabler-download' : 'tabler-cloud-upload'} />
+                          </Box>
+                          <Typography variant='subtitle1' fontWeight={600}>
+                            {isDragActive
+                              ? 'Drop files here'
+                              : files.length
+                                ? `${files.length} file(s) ready to import`
+                                : 'Drag and drop files here'}
+                          </Typography>
+                          <Typography variant='body2' color='text.secondary'>
+                            {importMode === 'combined' ? 'PDF files only' : 'PDF, Excel or images'} · Click to browse
+                          </Typography>
+                        </Stack>
+                      </Box>
+                      {!!files.length && (
+                        <Stack spacing={2}>
+                          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 2 }}>
+                            <Typography variant='subtitle2'>Files to import ({files.length})</Typography>
+                            {!busy && (
+                              <Button size='small' color='inherit' onClick={() => setFiles([])}>
+                                Clear all
+                              </Button>
+                            )}
+                          </Box>
+                          {files.map(upload => {
+                            const extension = upload.file.name.split('.').pop()?.toUpperCase() ?? 'FILE'
+                            const fileSize =
+                              upload.file.size < 1024
+                                ? `${upload.file.size} B`
+                                : `${(upload.file.size / 1024 / 1024).toFixed(upload.file.size < 1024 * 1024 ? 1 : 2)} MB`
+                            return (
+                              <Box
+                                key={upload.id}
+                                sx={{
+                                  p: 2,
+                                  border: 1,
+                                  borderColor: 'divider',
+                                  borderRadius: 1.5,
+                                  bgcolor: 'background.paper'
+                                }}
+                              >
+                                <Grid container spacing={2} alignItems='center'>
+                                  <Grid size={{ xs: 12, sm: importMode === 'manual' ? 5 : 8 }}>
+                                    <Stack direction='row' spacing={2} alignItems='center' sx={{ minWidth: 0 }}>
+                                      <Box
+                                        sx={{
+                                          width: 42,
+                                          height: 42,
+                                          flexShrink: 0,
+                                          display: 'grid',
+                                          placeItems: 'center',
+                                          borderRadius: 1,
+                                          color: 'primary.main',
+                                          bgcolor: 'action.hover'
+                                        }}
+                                      >
+                                        <i className='tabler-file-description' />
+                                      </Box>
+                                      <Box sx={{ minWidth: 0 }}>
+                                        <Typography
+                                          variant='body2'
+                                          fontWeight={600}
+                                          title={upload.file.name}
+                                          sx={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                                        >
+                                          {upload.file.name}
+                                        </Typography>
+                                        <Typography variant='caption' color='text.secondary'>
+                                          {extension} · {fileSize}
+                                        </Typography>
+                                      </Box>
+                                    </Stack>
+                                  </Grid>
+                                  <Grid size={{ xs: 10, sm: importMode === 'manual' ? 6 : 3 }}>
+                                    {importMode === 'manual' ? (
+                                      <SelectCustom
+                                        inputId={`merge-pdf-document-type-${upload.id}`}
+                                        name={`documentType-${upload.id}`}
+                                        label='Document type'
+                                        placeholder='Select ...'
+                                        classNamePrefix='select'
+                                        options={categoryOptions}
+                                        value={categoryOptions.find(option => option.value === upload.categoryId)}
+                                        isDisabled={busy}
+                                        onChange={option => {
+                                          if (option) {
+                                            setFiles(current =>
+                                              current.map(item =>
+                                                item.id === upload.id ? { ...item, categoryId: option.value } : item
+                                              )
+                                            )
+                                          }
+                                        }}
+                                      />
+                                    ) : (
+                                      <Chip size='small' variant='tonal' color='primary' label='Auto-detect page types' />
+                                    )}
+                                  </Grid>
+                                  <Grid size={{ xs: 2, sm: 1 }} sx={{ display: 'flex', justifyContent: 'flex-end' }}>
+                                    <IconButton
+                                      aria-label={`Remove ${upload.file.name}`}
+                                      disabled={busy}
+                                      color='error'
+                                      onClick={() => setFiles(current => current.filter(item => item.id !== upload.id))}
+                                    >
+                                      <i className='tabler-x' />
+                                    </IconButton>
+                                  </Grid>
+                                </Grid>
+                              </Box>
+                            )
+                          })}
+                        </Stack>
                       )}
-                      <Grid size={{ xs: 12, md: importMode === 'manual' ? 7 : 12 }}>
-                        <Button
-                          component='label'
-                          variant='outlined'
-                          color='primary'
-                          fullWidth
-                          sx={{ height: 44 }}
-                          disabled={busy}
-                        >
-                          {files.length
-                            ? `${files.length} file(s) selected`
-                            : importMode === 'combined'
-                              ? 'Choose PDF'
-                              : 'Choose PDF, Excel or image'}
-                          <input
-                            id='merge-pdf-file-input'
-                            type='file'
-                            hidden
-                            multiple
-                            accept={
-                              importMode === 'combined' ? '.pdf' : '.pdf,.xlsx,.xls,.png,.jpg,.jpeg,.webp,.tif,.tiff'
-                            }
-                            onChange={onFilesChange}
-                          />
-                        </Button>
-                      </Grid>
-                      <Grid size={12}>
+                      <Box>
                         <Button
                           variant='contained'
                           color='primary'
@@ -778,8 +942,8 @@ const MergePdfPage = () => {
                         >
                           {busy ? 'Importing ...' : 'Import'}
                         </Button>
-                      </Grid>
-                    </Grid>
+                      </Box>
+                    </Stack>
                   </CardContent>
                 </Card>
                 <Card sx={{ overflow: 'visible' }}>

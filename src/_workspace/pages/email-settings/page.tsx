@@ -85,7 +85,7 @@ const EmailSettingsForm = ({ initialSettings }: { initialSettings: EmailSettings
     <Card>
       <CardHeader
         title='Accounting email settings'
-        subheader='Completed PDFs saved to the Server Share are collected and sent at the scheduled time.'
+        // subheader='Completed PDFs saved to the Server Share are collected and sent at the scheduled time.'
         titleTypographyProps={{ variant: 'h5' }}
         action={<Chip size='small' variant='tonal' label={`Revision ${initialSettings.revisionNo}`} />}
       />
@@ -125,7 +125,8 @@ const EmailSettingsForm = ({ initialSettings }: { initialSettings: EmailSettings
                     slotProps={{ inputLabel: { shrink: true }, htmlInput: { step: 60 } }}
                     helperText={
                       fieldState.error?.message ||
-                      'Default: 17:00 Thailand time. Changing the time allows another batch of unsent PDFs today.'
+                      'Default: 17:00'
+                      // 'Default: 17:00 Thailand time. Changing the time allows another batch of unsent PDFs today.'
                     }
                   />
                 )}
@@ -163,10 +164,12 @@ const EmailSettingsForm = ({ initialSettings }: { initialSettings: EmailSettings
             </Grid>
           </Grid>
           <Typography variant='body2' color='text.secondary'>
-            Configured recipients: {recipients.length} | Time zone: Asia/Bangkok
+            {/* Configured recipients: {recipients.length} | Time zone: Asia/Bangkok */}
+            Configured recipients: {recipients.length}
           </Typography>
           <Stack direction='row' spacing={2}>
             <Button
+              color='success'
               variant='contained'
               onClick={() => {
                 void handleSubmit(save)()
@@ -180,7 +183,7 @@ const EmailSettingsForm = ({ initialSettings }: { initialSettings: EmailSettings
                 )
               }
             >
-              {saveMutation.isPending ? 'Saving...' : 'Save settings'}
+              {saveMutation.isPending ? 'Saving...' : 'Save & Complete'}
             </Button>
             <Button
               variant='tonal'
