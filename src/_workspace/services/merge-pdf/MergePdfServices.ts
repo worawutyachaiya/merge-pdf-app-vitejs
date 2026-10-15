@@ -22,6 +22,24 @@ const auditRequest = <T>(options: AxiosRequestConfig): Promise<AxiosResponse<T>>
 }
 
 export default class MergePdfServices {
+  static detectDocumentType(file: File) {
+    const data = new FormData()
+    data.append('file', file)
+    data.append('fileName', file.name)
+    return auditRequest<
+      ResultDataResponseI<{
+        categoryId: number
+        source: 'FILENAME' | 'AUTO_TEXT' | 'UNKNOWN'
+        confidence: number | null
+      }>
+    >({
+      url: `${root}/editor/detect-document-type`,
+      method: 'POST',
+      data,
+      headers: { 'Content-Type': false }
+    })
+  }
+
   static prepareFile(file: File, combined: boolean) {
     const data = new FormData()
     data.append('file', file)

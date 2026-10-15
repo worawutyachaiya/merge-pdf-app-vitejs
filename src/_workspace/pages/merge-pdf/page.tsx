@@ -94,6 +94,8 @@ interface ImportFile {
   id: number
   file: File
   categoryId: number
+  isDetecting: boolean
+  typeSelected: boolean
 }
 
 const MergePdfPage = () => {
@@ -347,7 +349,7 @@ const MergePdfPage = () => {
 
   const importFiles = () =>
     run(async () => {
-      if (!detail || !files.length) return
+      if (!detail || !files.length || files.some(file => file.isDetecting)) return
       let completed = 0
       try {
         for (const upload of files) {
@@ -628,6 +630,29 @@ const MergePdfPage = () => {
         : 'Status 04 confirmed in current edits. Save to apply.'
     )
 
+  const detectImportTypes = async (uploads: ImportFile[]) => {
+    // Process the queue sequentially to avoid parsing many large PDFs at once.
+    for (const upload of uploads) {
+      let categoryId = 10
+      try {
+        const response = await MergePdfServices.detectDocumentType(upload.file)
+        const detected = response.data.ResultOnDb?.[0]
+        if (response.data.Status && detected && categoryOptions.some(option => option.value === detected.categoryId)) {
+          categoryId = detected.categoryId
+        }
+      } catch {
+        // Detection is a suggestion; an unavailable reader must not block manual selection.
+      }
+      setFiles(current =>
+        current.map(item =>
+          item.id === upload.id && item.file === upload.file
+            ? { ...item, categoryId: item.typeSelected ? item.categoryId : categoryId, isDetecting: false }
+            : item
+        )
+      )
+    }
+  }
+
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     accept:
       importMode === 'combined'
@@ -645,14 +670,15 @@ const MergePdfPage = () => {
     multiple: true,
     onDrop: (acceptedFiles, fileRejections) => {
       if (acceptedFiles.length) {
-        setFiles(current => [
-          ...current,
-          ...acceptedFiles.map(file => ({
-            id: nextImportFileId.current++,
-            file,
-            categoryId: 1
-          }))
-        ])
+        const uploads = acceptedFiles.map(file => ({
+          id: nextImportFileId.current++,
+          file,
+          categoryId: 10,
+          isDetecting: importMode === 'manual',
+          typeSelected: false
+        }))
+        setFiles(current => [...current, ...uploads])
+        if (importMode === 'manual') void detectImportTypes(uploads)
       }
       if (fileRejections.length) {
         const names = fileRejections
@@ -888,6 +914,7 @@ const MergePdfPage = () => {
                                         </Typography>
                                         <Typography variant='caption' color='text.secondary'>
                                           {extension} · {fileSize}
+                                          {upload.isDetecting ? ' · Detecting type...' : ''}
                                         </Typography>
                                       </Box>
                                     </Stack>
@@ -907,14 +934,21 @@ const MergePdfPage = () => {
                                           if (option) {
                                             setFiles(current =>
                                               current.map(item =>
-                                                item.id === upload.id ? { ...item, categoryId: option.value } : item
+                                                item.id === upload.id
+                                                  ? { ...item, categoryId: option.value, typeSelected: true }
+                                                  : item
                                               )
                                             )
                                           }
                                         }}
                                       />
                                     ) : (
-                                      <Chip size='small' variant='tonal' color='primary' label='Auto-detect page types' />
+                                      <Chip
+                                        size='small'
+                                        variant='tonal'
+                                        color='primary'
+                                        label='Auto-detect page types'
+                                      />
                                     )}
                                   </Grid>
                                   <Grid size={{ xs: 2, sm: 1 }} sx={{ display: 'flex', justifyContent: 'flex-end' }}>
@@ -937,7 +971,7 @@ const MergePdfPage = () => {
                         <Button
                           variant='contained'
                           color='primary'
-                          disabled={busy || files.length === 0}
+                          disabled={busy || files.length === 0 || files.some(file => file.isDetecting)}
                           onClick={() => void importFiles()}
                         >
                           {busy ? 'Importing ...' : 'Import'}
