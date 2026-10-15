@@ -143,7 +143,7 @@ const MergePdfSearchResult = ({ onOpen, onAdd, refreshVersion }: Props) => {
               {row.original.OUTPUT_FILE_NAME}
             </Button>
           ) : (
-            '—'
+            '-'
           )
       },
       {
