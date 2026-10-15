@@ -53,6 +53,8 @@ import { ToastMessageError, ToastMessageSuccess } from '@/components/ToastMessag
 import CustomTextField from '@/components/mui/TextField'
 import SelectCustom from '@/components/react-select/SelectCustom'
 import ConfirmModal from '@/components/ConfirmModal'
+import DialogCloseButton from '@/components/dialogs/DialogCloseButton'
+import Transition from '@/components/TransitionDialog'
 
 import SortablePage from './SortablePage'
 import MergePdfList from './MergePdfList'
@@ -1166,12 +1168,39 @@ const MergePdfPage = () => {
         onCloseClick={() => setCreateConfirmOpen(false)}
         isDelete={false}
         isLoading={busy}
+        title='Create document'
+        description='Create a new document with an automatically assigned number?'
+        confirmLabel='Create draft'
       />
-      <Dialog open={previewOpen && !!selectedPage} onClose={() => setPreviewOpen(false)} fullWidth maxWidth='lg'>
+      <Dialog
+        open={previewOpen && !!selectedPage}
+        onClose={(_, reason) => {
+          if (!busy && reason !== 'backdropClick') setPreviewOpen(false)
+        }}
+        disableEscapeKeyDown={busy}
+        TransitionComponent={Transition}
+        fullWidth
+        maxWidth='lg'
+        sx={{
+          '& .MuiDialog-paper': { overflow: 'visible' },
+          '& .MuiDialog-container': { justifyContent: 'center', alignItems: 'flex-start' }
+        }}
+        PaperProps={{ sx: { top: 30, m: 0 } }}
+      >
         <DialogTitle>
-          {selectedPage
-            ? `Page ${selectedPage.SORT_ORDER} · ${documentsById.get(selectedPage.DOCUMENT_ID)?.ORIGINAL_FILE_NAME ?? ''}`
-            : 'Page preview'}
+          <Typography variant='h5' component='span'>
+            {selectedPage
+              ? `Page ${selectedPage.SORT_ORDER} · ${documentsById.get(selectedPage.DOCUMENT_ID)?.ORIGINAL_FILE_NAME ?? ''}`
+              : 'Page preview'}
+          </Typography>
+          <DialogCloseButton
+            onClick={() => setPreviewOpen(false)}
+            disabled={busy}
+            aria-label='Close page preview'
+            disableRipple
+          >
+            <i className='tabler-x' />
+          </DialogCloseButton>
         </DialogTitle>
         <DialogContent>
           {selectedPage && detail && (
@@ -1312,19 +1341,20 @@ const MergePdfPage = () => {
           >
             Next
           </Button>
-          <Button variant='contained' onClick={() => setPreviewOpen(false)}>
+          <Button variant='tonal' color='secondary' disabled={busy} onClick={() => setPreviewOpen(false)}>
             Close
           </Button>
         </DialogActions>
       </Dialog>
-      <Dialog
-        open={confirmAction !== null}
-        onClose={(_, reason) => {
-          if (!busy && reason !== 'backdropClick') setConfirmAction(null)
-        }}
-      >
-        <DialogTitle>
-          {confirmAction?.kind === 'complete'
+      <ConfirmModal
+        show={confirmAction !== null}
+        onConfirmClick={() => void confirm()}
+        onCloseClick={() => setConfirmAction(null)}
+        isLoading={busy}
+        isDelete={confirmAction?.kind !== 'complete'}
+        confirmDisabled={confirmAction?.kind === 'complete' && !canComplete}
+        title={
+          confirmAction?.kind === 'complete'
             ? hasCompleted
               ? 'Save Changes'
               : 'Save & Complete'
@@ -1332,58 +1362,38 @@ const MergePdfPage = () => {
               ? `Remove ${confirmAction.ids.length} selected pages`
               : confirmAction?.kind === 'page'
                 ? 'Remove page'
-                : 'Remove document'}
-        </DialogTitle>
-        <DialogContent>
-          <Typography>
-            {confirmAction?.kind === 'complete'
-              ? hasCompleted
-                ? `Save changes to ${currentPublication?.OUTPUT_FILE_NAME ?? detail?.job.JOB_CODE} at the same shared path?`
-                : 'Merge the pages in this order and save the PDF to the shared folder?'
-              : confirmAction?.kind === 'pages'
-                ? `Remove all ${confirmAction.ids.length} selected pages from this document?`
-                : confirmAction?.kind === 'page'
-                  ? 'Remove this page from this document?'
-                  : 'Remove this source document and all of its pages?'}
-          </Typography>
-        </DialogContent>
-        <DialogActions>
-          <Button
-            variant='contained'
-            color={confirmAction?.kind === 'complete' ? 'success' : 'error'}
-            disabled={busy || (confirmAction?.kind === 'complete' && !canComplete)}
-            onClick={() => void confirm()}
-          >
-            {confirmAction?.kind === 'complete' ? (hasCompleted ? 'Save Changes' : 'Save & Complete') : 'Remove'}
-          </Button>
-          <Button variant='tonal' color='secondary' disabled={busy} onClick={() => setConfirmAction(null)}>
-            Close
-          </Button>
-        </DialogActions>
-      </Dialog>
-      <Dialog
-        open={statusEditId !== null}
-        onClose={(_, reason) => {
-          if (!busy && reason !== 'backdropClick') setStatusEditId(null)
-        }}
-      >
-        <DialogTitle>Import entry status 04</DialogTitle>
-        <DialogContent>
-          <Typography>
-            {detail?.documents.find(document => document.DOCUMENT_ID === statusEditId)?.ENTRY_STATUS_CODE === '04'
-              ? 'Clear the status 04 confirmation for this source document?'
-              : 'Have you checked the source document and confirmed that the Import entry status is 04?'}
-          </Typography>
-        </DialogContent>
-        <DialogActions>
-          <Button variant='contained' color='success' disabled={busy} onClick={() => void saveEntryStatus()}>
-            Confirm
-          </Button>
-          <Button variant='tonal' color='secondary' disabled={busy} onClick={() => setStatusEditId(null)}>
-            Close
-          </Button>
-        </DialogActions>
-      </Dialog>
+                : 'Remove document'
+        }
+        description={
+          confirmAction?.kind === 'complete'
+            ? hasCompleted
+              ? `Save changes to ${currentPublication?.OUTPUT_FILE_NAME ?? detail?.job.JOB_CODE} at the same shared path?`
+              : 'Merge the pages in this order and save the PDF to the shared folder?'
+            : confirmAction?.kind === 'pages'
+              ? `Remove all ${confirmAction.ids.length} selected pages from this document?`
+              : confirmAction?.kind === 'page'
+                ? 'Remove this page from this document?'
+                : 'Remove this source document and all of its pages?'
+        }
+        confirmLabel={
+          confirmAction?.kind === 'complete' ? (hasCompleted ? 'Save Changes' : 'Save & Complete') : 'Remove'
+        }
+      />
+      <ConfirmModal
+        show={statusEditId !== null}
+        onConfirmClick={() => void saveEntryStatus()}
+        onCloseClick={() => setStatusEditId(null)}
+        isLoading={busy}
+        title='Import entry status 04'
+        description={
+          detail?.documents.find(document => document.DOCUMENT_ID === statusEditId)?.ENTRY_STATUS_CODE === '04'
+            ? 'Clear the status 04 confirmation for this source document?'
+            : 'Have you checked the source document and confirmed that the Import entry status is 04?'
+        }
+        confirmLabel={
+          documentsById.get(statusEditId ?? 0)?.ENTRY_STATUS_CODE === '04' ? 'Clear status 04' : 'Confirm status 04'
+        }
+      />
     </Grid>
   )
 }

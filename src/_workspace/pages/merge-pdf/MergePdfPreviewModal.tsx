@@ -61,13 +61,17 @@ const MergePdfPreviewModal = ({ open, job, onClose }: Props) => {
       open={open}
       TransitionComponent={Transition}
       onClose={(_, reason) => reason !== 'backdropClick' && onClose()}
-      sx={{ '& .MuiDialog-paper': { overflow: 'visible' } }}
+      sx={{
+        '& .MuiDialog-paper': { overflow: 'visible' },
+        '& .MuiDialog-container': { justifyContent: 'center', alignItems: 'flex-start' }
+      }}
+      PaperProps={{ sx: { top: 30, m: 0 } }}
     >
       <DialogTitle>
         <Typography variant='h5' component='span'>
           {publication?.OUTPUT_FILE_NAME ?? job?.JOB_TITLE ?? 'View PDF'}
         </Typography>
-        <DialogCloseButton onClick={onClose} disableRipple>
+        <DialogCloseButton onClick={onClose} aria-label='Close PDF preview' disableRipple>
           <i className='tabler-x' />
         </DialogCloseButton>
       </DialogTitle>

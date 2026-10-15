@@ -46,7 +46,7 @@ const MergePdfViewModal = ({ open, job, onClose }: Props) => {
         <Typography variant='h5' component='span'>
           View Merge PDF
         </Typography>
-        <DialogCloseButton onClick={onClose} disableRipple>
+        <DialogCloseButton onClick={onClose} aria-label='Close document details' disableRipple>
           <i className='tabler-x' />
         </DialogCloseButton>
       </DialogTitle>
