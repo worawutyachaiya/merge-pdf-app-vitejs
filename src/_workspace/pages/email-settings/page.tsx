@@ -87,7 +87,7 @@ const EmailSettingsForm = ({ initialSettings }: { initialSettings: EmailSettings
         title='Accounting email settings'
         // subheader='Completed PDFs saved to the Server Share are collected and sent at the scheduled time.'
         titleTypographyProps={{ variant: 'h5' }}
-        action={<Chip size='small' variant='tonal' label={`Revision ${initialSettings.revisionNo}`} />}
+        // action={<Chip size='small' variant='tonal' label={`Revision ${initialSettings.revisionNo}`} />}
       />
       <CardContent>
         <Stack spacing={4}>
