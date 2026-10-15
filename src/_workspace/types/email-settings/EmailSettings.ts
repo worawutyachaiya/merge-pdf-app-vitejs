@@ -5,6 +5,7 @@ export interface AccountingPerson {
 }
 
 export interface EmailSettings {
+  revisionNo: number
   scheduleTime: string
   recipients: AccountingPerson[]
 }

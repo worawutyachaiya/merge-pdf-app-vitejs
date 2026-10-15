@@ -154,7 +154,18 @@ const MergePdfSearchResult = ({ onOpen, onAdd, refreshVersion }: Props) => {
         filterVariant: 'text',
         columnFilterModeOptions: ['contains'],
         filterFn: 'contains',
-        Cell: ({ row }) => /^I\d{2}-\d{4,}$/.test(row.original.JOB_CODE) ? row.original.JOB_CODE : row.original.JOB_TITLE
+        Cell: ({ row }) =>
+          /^I\d{2}-\d{4,}$/.test(row.original.JOB_CODE) ? row.original.JOB_CODE : row.original.JOB_TITLE
+      },
+      {
+        accessorKey: 'REVISION_NO',
+        header: 'REVISION',
+        size: 115,
+        minSize: 110,
+        enableSorting: false,
+        enableColumnFilter: false,
+        muiTableHeadCellProps: { align: 'center' },
+        muiTableBodyCellProps: { align: 'center' }
       },
       { accessorKey: 'DOCUMENT_COUNT', header: 'FILES', size: 155, minSize: 150, enableColumnFilter: false },
       { accessorKey: 'PAGE_COUNT', header: 'PAGES', size: 155, minSize: 150, enableColumnFilter: false },

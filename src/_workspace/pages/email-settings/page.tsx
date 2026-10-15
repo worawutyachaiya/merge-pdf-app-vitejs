@@ -1,4 +1,15 @@
-import { Alert, Button, Card, CardContent, CardHeader, CircularProgress, Grid, Stack, Typography } from '@mui/material'
+import {
+  Alert,
+  Button,
+  Card,
+  CardContent,
+  CardHeader,
+  Chip,
+  CircularProgress,
+  Grid,
+  Stack,
+  Typography
+} from '@mui/material'
 import { useDeferredValue, useMemo, useState } from 'react'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { Controller, useForm, useWatch } from 'react-hook-form'
@@ -76,6 +87,7 @@ const EmailSettingsForm = ({ initialSettings }: { initialSettings: EmailSettings
         title='Accounting email settings'
         subheader='Completed PDFs saved to the Server Share are collected and sent at the scheduled time.'
         titleTypographyProps={{ variant: 'h5' }}
+        action={<Chip size='small' variant='tonal' label={`Revision ${initialSettings.revisionNo}`} />}
       />
       <CardContent>
         <Stack spacing={4}>
@@ -201,10 +213,7 @@ const EmailSettingsPage = () => {
       </Grid>
       <Grid size={12}>
         {settings && !settingsQuery.isError ? (
-          <EmailSettingsForm
-            key={`${settings.scheduleTime}-${settings.recipients.map(person => person.employeeCode).join(',')}`}
-            initialSettings={settings}
-          />
+          <EmailSettingsForm key={settings.revisionNo} initialSettings={settings} />
         ) : (
           <Card>
             <CardHeader title='Accounting email settings' titleTypographyProps={{ variant: 'h5' }} />

@@ -23,6 +23,7 @@ const columns = [
   'STATUS',
   'OUTPUT_FILE_NAME',
   'JOB_TITLE',
+  'REVISION_NO',
   'DOCUMENT_COUNT',
   'PAGE_COUNT',
   ...documentStatusColumnIds,
@@ -92,14 +93,21 @@ export const fetchMergePdfListValues = async (menuId: number): Promise<MergePdfL
     const columnOrder = [
       ...savedOrder.filter(
         column =>
-          currentColumns.has(column) && column !== 'OUTPUT_FILE_NAME' && !documentStatusColumnIds.includes(column)
+          currentColumns.has(column) &&
+          column !== 'OUTPUT_FILE_NAME' &&
+          column !== 'REVISION_NO' &&
+          !documentStatusColumnIds.includes(column)
       ),
       ...columns.filter(
         column =>
-          !savedOrder.includes(column) && column !== 'OUTPUT_FILE_NAME' && !documentStatusColumnIds.includes(column)
+          !savedOrder.includes(column) &&
+          column !== 'OUTPUT_FILE_NAME' &&
+          column !== 'REVISION_NO' &&
+          !documentStatusColumnIds.includes(column)
       )
     ]
     columnOrder.splice(columnOrder.indexOf('STATUS') + 1, 0, 'OUTPUT_FILE_NAME')
+    columnOrder.splice(columnOrder.indexOf('JOB_TITLE') + 1, 0, 'REVISION_NO')
     columnOrder.splice(columnOrder.indexOf('PAGE_COUNT') + 1, 0, ...documentStatusColumnIds)
     return {
       searchFilters: { ...defaults.searchFilters, ...saved.searchFilters },

@@ -74,6 +74,10 @@ const MergePdfPreviewModal = ({ open, job, onClose }: Props) => {
       <DialogContent>
         <Stack spacing={3}>
           <Typography>{detail?.job.JOB_TITLE ?? job?.JOB_TITLE}</Typography>
+          <Typography variant='body2' color='text.secondary'>
+            Revision {detail?.job.REVISION_NO ?? job?.REVISION_NO ?? '-'}
+            {publication ? ` · PDF version ${publication.PUBLICATION_VERSION}` : ''}
+          </Typography>
           {filePath && (
             <Box>
               <CustomTextField

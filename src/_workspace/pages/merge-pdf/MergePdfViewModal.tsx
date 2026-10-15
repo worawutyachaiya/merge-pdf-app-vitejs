@@ -69,10 +69,13 @@ const MergePdfViewModal = ({ open, job, onClose }: Props) => {
               }
             />
           </Grid>
-          <Grid size={{ xs: 12, sm: 3 }}>
+          <Grid size={{ xs: 12, sm: 6 }}>
+            <CustomTextField fullWidth disabled label='Revision' value={currentJob?.REVISION_NO ?? ''} />
+          </Grid>
+          <Grid size={{ xs: 12, sm: 6 }}>
             <CustomTextField fullWidth disabled label='Files' value={currentJob?.DOCUMENT_COUNT ?? 0} />
           </Grid>
-          <Grid size={{ xs: 12, sm: 3 }}>
+          <Grid size={{ xs: 12, sm: 6 }}>
             <CustomTextField fullWidth disabled label='Pages' value={currentJob?.PAGE_COUNT ?? 0} />
           </Grid>
           <Grid size={12}>
