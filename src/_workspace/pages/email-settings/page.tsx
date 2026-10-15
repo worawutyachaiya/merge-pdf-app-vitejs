@@ -74,7 +74,7 @@ const EmailSettingsForm = ({ initialSettings }: { initialSettings: EmailSettings
     <Card>
       <CardHeader
         title='Accounting email settings'
-        subheader='Completed PDFs are collected and sent once a day after they are saved to the Server Share.'
+        subheader='Completed PDFs saved to the Server Share are collected and sent at the scheduled time.'
         titleTypographyProps={{ variant: 'h5' }}
       />
       <CardContent>
@@ -111,7 +111,10 @@ const EmailSettingsForm = ({ initialSettings }: { initialSettings: EmailSettings
                     disabled={isBusy || !canUpdate}
                     error={Boolean(fieldState.error)}
                     slotProps={{ inputLabel: { shrink: true }, htmlInput: { step: 60 } }}
-                    helperText={fieldState.error?.message || 'Default: 17:00 Thailand time.'}
+                    helperText={
+                      fieldState.error?.message ||
+                      'Default: 17:00 Thailand time. Changing the time allows another batch of unsent PDFs today.'
+                    }
                   />
                 )}
               />
