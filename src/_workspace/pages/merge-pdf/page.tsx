@@ -656,7 +656,15 @@ const MergePdfPage = () => {
               <CardHeader
                 title={detail?.job.JOB_TITLE ?? (editorMode === 'Add' ? 'New document' : 'Loading...')}
                 titleTypographyProps={{ variant: 'h5' }}
-                action={detail && <Chip size='small' variant='tonal' label={`Revision ${detail.job.REVISION_NO}`} />}
+                action={
+                  detail && (
+                    <Chip
+                      size='small'
+                      variant='tonal'
+                      label={`Revision ${detail.job.REVISION_NO > 0 ? detail.job.REVISION_NO : '-'}`}
+                    />
+                  )
+                }
               />
               <CardContent>
                 <Grid container spacing={4} alignItems='flex-end'>

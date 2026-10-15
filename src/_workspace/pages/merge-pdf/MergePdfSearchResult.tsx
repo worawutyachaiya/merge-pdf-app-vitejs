@@ -160,12 +160,11 @@ const MergePdfSearchResult = ({ onOpen, onAdd, refreshVersion }: Props) => {
       {
         accessorKey: 'REVISION_NO',
         header: 'REVISION',
-        size: 115,
-        minSize: 110,
+        size: 150,
+        minSize: 150,
         enableSorting: false,
         enableColumnFilter: false,
-        muiTableHeadCellProps: { align: 'center' },
-        muiTableBodyCellProps: { align: 'center' }
+        Cell: ({ row }) => (row.original.REVISION_NO > 0 ? row.original.REVISION_NO : '-')
       },
       { accessorKey: 'DOCUMENT_COUNT', header: 'FILES', size: 155, minSize: 150, enableColumnFilter: false },
       { accessorKey: 'PAGE_COUNT', header: 'PAGES', size: 155, minSize: 150, enableColumnFilter: false },
