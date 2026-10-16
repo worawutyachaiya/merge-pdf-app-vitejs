@@ -45,6 +45,7 @@ import {
   useMergePdfPagePreview
 } from '@/_workspace/react-query/hooks/useMergePdf'
 import MergePdfServices from '@/_workspace/services/merge-pdf/MergePdfServices'
+import SettingsServices from '@/_workspace/services/settings/SettingsServices'
 import {
   MERGE_PDF_CATEGORIES,
   REQUIRED_MERGE_PDF_CATEGORY_IDS,
@@ -62,7 +63,7 @@ import MergePdfList from './MergePdfList'
 import MergePdfPageThumbnail from './MergePdfPageThumbnail'
 import { breadcrumbNavigation, MENU_NAME } from './env'
 import { mergePdfFormDefaults, mergePdfFormSchema, type MergePdfFormValues } from './validationSchema'
-import { movePagesToPosition } from './pageOrder'
+import { categoryRanks, insertPagesByCategory, movePagesToPosition, sortPagesByCategory } from './pageOrder'
 import { useObjectUrl } from './useObjectUrl'
 import { updateDraftPages, reorderDraftPages, base64Pdf } from './editorDraft'
 
@@ -81,6 +82,13 @@ const errorMessage = (error: unknown): string => {
     }
   }
   return error instanceof Error ? error.message : 'Operation failed'
+}
+
+const loadCategoryRanks = async () => {
+  const response = await SettingsServices.documentOrder()
+  if (!response.data.Status || !response.data.ResultOnDb.length)
+    throw new Error(response.data.Message || 'Unable to load document order')
+  return categoryRanks(response.data.ResultOnDb)
 }
 
 type Confirmation =
@@ -350,6 +358,7 @@ const MergePdfPage = () => {
   const importFiles = () =>
     run(async () => {
       if (!detail || !files.length || files.some(file => file.isDetecting)) return
+      const ranks = await loadCategoryRanks()
       let completed = 0
       try {
         for (const upload of files) {
@@ -376,11 +385,7 @@ const MergePdfPage = () => {
             [documentId]: { file, pdf: base64Pdf(prepared.pdf), thumbnails: prepared.thumbnails }
           }))
           await changeDraft(current => {
-            const ordered = [...current.pages]
-            for (const page of pages) {
-              const insertAfter = ordered.findLastIndex(existing => existing.CATEGORY_ID <= page.CATEGORY_ID)
-              ordered.splice(insertAfter + 1, 0, page)
-            }
+            const ordered = insertPagesByCategory(current.pages, pages, ranks)
             return {
               ...current,
               pages: ordered.map((page, index) => ({ ...page, SORT_ORDER: index + 1 })),
@@ -451,10 +456,9 @@ const MergePdfPage = () => {
 
   const sortByCategory = () => {
     if (!detail) return
-    const pageIds = [...detail.pages]
-      .sort((a, b) => a.CATEGORY_ID - b.CATEGORY_ID || a.SORT_ORDER - b.SORT_ORDER)
-      .map(page => page.PAGE_ID)
     void run(async () => {
+      const ranks = await loadCategoryRanks()
+      const pageIds = sortPagesByCategory(detail.pages, ranks).map(page => page.PAGE_ID)
       firstDetail(
         await actions.reorder.mutateAsync({
           jobId: detail.job.JOB_ID,

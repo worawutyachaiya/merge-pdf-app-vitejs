@@ -1,21 +1,9 @@
-import {
-  Alert,
-  Button,
-  Card,
-  CardContent,
-  CardHeader,
-  Chip,
-  CircularProgress,
-  Grid,
-  Stack,
-  Typography
-} from '@mui/material'
+import { Alert, Button, Card, CardContent, CardHeader, CircularProgress, Grid, Stack, Typography } from '@mui/material'
 import { useDeferredValue, useMemo, useState } from 'react'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { Controller, useForm, useWatch } from 'react-hook-form'
 import SelectCustom from '@/components/react-select/SelectCustom'
 
-import DxBreadCrumbs from '@/_template/DxBreadCrumbs'
 import { useCheckPermission } from '@/_template/CheckPermission'
 import CustomTextField from '@/components/mui/TextField'
 import {
@@ -27,7 +15,7 @@ import EmailSettingsServices from '@/_workspace/services/email-settings/EmailSet
 import type { AccountingPerson, EmailSettings } from '@/_workspace/types/email-settings/EmailSettings'
 import { ToastMessageError, ToastMessageSuccess } from '@/components/ToastMessage'
 
-import { breadcrumbNavigation, MENU_ID, MENU_NAME } from './env'
+import { MENU_ID } from './env'
 import { validationSchema, type FormDataPage } from './validationSchema'
 
 const defaultScheduleTime = '17:00'
@@ -124,8 +112,7 @@ const EmailSettingsForm = ({ initialSettings }: { initialSettings: EmailSettings
                     error={Boolean(fieldState.error)}
                     slotProps={{ inputLabel: { shrink: true }, htmlInput: { step: 60 } }}
                     helperText={
-                      fieldState.error?.message ||
-                      'Default: 17:00'
+                      fieldState.error?.message || 'Default: 17:00'
                       // 'Default: 17:00 Thailand time. Changing the time allows another batch of unsent PDFs today.'
                     }
                   />
@@ -205,15 +192,12 @@ const EmailSettingsForm = ({ initialSettings }: { initialSettings: EmailSettings
   )
 }
 
-const EmailSettingsPage = () => {
+const AccountingEmailSettings = () => {
   const settingsQuery = useEmailSettings()
   const settings = settingsQuery.data?.data.ResultOnDb?.[0]
 
   return (
     <Grid container spacing={6}>
-      <Grid size={12} sx={{ display: 'flex', alignItems: 'center' }}>
-        <DxBreadCrumbs menuName={MENU_NAME} breadcrumbNavigation={breadcrumbNavigation} />
-      </Grid>
       <Grid size={12}>
         {settings && !settingsQuery.isError ? (
           <EmailSettingsForm key={settings.revisionNo} initialSettings={settings} />
@@ -249,4 +233,4 @@ const EmailSettingsPage = () => {
   )
 }
 
-export default EmailSettingsPage
+export default AccountingEmailSettings
