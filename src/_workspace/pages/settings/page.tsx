@@ -9,7 +9,7 @@ const SettingsPage = () => {
   const [tab, setTab] = useState('document-order')
   return (
     <Grid container spacing={6}>
-      <Grid size={12}>
+      <Grid size={12} sx={{ display: 'flex', alignItems: 'center' }}>
         <DxBreadCrumbs menuName={MENU_NAME} breadcrumbNavigation={breadcrumbNavigation} />
       </Grid>
       <Grid size={12}>
