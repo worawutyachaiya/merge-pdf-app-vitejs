@@ -72,8 +72,8 @@ const EmailSettingsForm = ({ initialSettings }: { initialSettings: EmailSettings
   return (
     <Card>
       <CardHeader
-        title='Accounting email settings'
-        // subheader='Completed PDFs saved to the Server Share are collected and sent at the scheduled time.'
+        title='Accounting email'
+        subheader='Send completed PDFs at the scheduled time.'
         titleTypographyProps={{ variant: 'h5' }}
         // action={<Chip size='small' variant='tonal' label={`Revision ${initialSettings.revisionNo}`} />}
       />
@@ -98,7 +98,7 @@ const EmailSettingsForm = ({ initialSettings }: { initialSettings: EmailSettings
             </Alert>
           )}
           <Grid container spacing={4}>
-            <Grid size={{ xs: 12, md: 4 }}>
+            <Grid size={{ xs: 12, sm: 6 }}>
               <Controller
                 name='scheduleTime'
                 control={control}
@@ -170,7 +170,7 @@ const EmailSettingsForm = ({ initialSettings }: { initialSettings: EmailSettings
                 )
               }
             >
-              {saveMutation.isPending ? 'Saving...' : 'Save & Complete'}
+              {saveMutation.isPending ? 'Saving...' : 'Save'}
             </Button>
             <Button
               variant='tonal'
@@ -197,39 +197,37 @@ const AccountingEmailSettings = () => {
   const settings = settingsQuery.data?.data.ResultOnDb?.[0]
 
   return (
-    <Grid container spacing={6}>
-      <Grid size={12}>
-        {settings && !settingsQuery.isError ? (
-          <EmailSettingsForm key={settings.revisionNo} initialSettings={settings} />
-        ) : (
-          <Card>
-            <CardHeader title='Accounting email settings' titleTypographyProps={{ variant: 'h5' }} />
-            <CardContent>
-              {settingsQuery.isLoading ? (
-                <CircularProgress size={24} />
-              ) : (
-                <Alert
-                  severity='error'
-                  action={
-                    <Button
-                      color='inherit'
-                      disabled={settingsQuery.isFetching}
-                      onClick={() => {
-                        void settingsQuery.refetch()
-                      }}
-                    >
-                      Retry
-                    </Button>
-                  }
-                >
-                  Unable to load email settings. Please try again or contact the system administrator.
-                </Alert>
-              )}
-            </CardContent>
-          </Card>
-        )}
-      </Grid>
-    </Grid>
+    <>
+      {settings && !settingsQuery.isError ? (
+        <EmailSettingsForm key={settings.revisionNo} initialSettings={settings} />
+      ) : (
+        <Card>
+          <CardHeader title='Accounting email' titleTypographyProps={{ variant: 'h5' }} />
+          <CardContent>
+            {settingsQuery.isLoading ? (
+              <CircularProgress size={24} />
+            ) : (
+              <Alert
+                severity='error'
+                action={
+                  <Button
+                    color='inherit'
+                    disabled={settingsQuery.isFetching}
+                    onClick={() => {
+                      void settingsQuery.refetch()
+                    }}
+                  >
+                    Retry
+                  </Button>
+                }
+              >
+                Unable to load email settings. Please try again or contact the system administrator.
+              </Alert>
+            )}
+          </CardContent>
+        </Card>
+      )}
+    </>
   )
 }
 
