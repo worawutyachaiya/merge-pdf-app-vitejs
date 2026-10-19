@@ -1,7 +1,7 @@
 module.exports = {
   apps: [
     {
-      name: 'trade-compliance-web-app-8097-vitejs',
+      name: 'merge-pdf-web-app-8105-vitejs',
       script: 'npm',
       args: 'run start:prod',
       env: {

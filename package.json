@@ -1,5 +1,5 @@
 {
-  "name": "merge-pdf-web-app-8097-vitejs",
+  "name": "merge-pdf-web-app-8105-vitejs",
   "private": true,
   "version": "0.0.0",
   "scripts": {
@@ -7,9 +7,9 @@
     "build:prod": "vite build --mode production",
     "build:sit": "vite build --mode sit",
     "build:uat": "vite build --mode uat",
-    "start:prod": "serve dist -s -l 8097",
-    "start:sit": "serve dist -s -l 8097",
-    "start:uat": "serve dist -s -l 8097",
+    "start:prod": "serve dist -s -l 8105",
+    "start:sit": "serve dist -s -l 8105",
+    "start:uat": "serve dist -s -l 8105",
     "preview": "vite preview",
     "lint": "eslint . --ext .js,.jsx,.ts,.tsx",
     "lint:fix": "eslint . --ext .js,.jsx,.ts,.tsx --fix",

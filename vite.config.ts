@@ -19,7 +19,7 @@ export default defineConfig(({ mode }) => {
   return {
     plugins: [react(), tailwindcss()],
     server: {
-      port: 8097
+      port: 8105
     },
     resolve: {
       alias: {
