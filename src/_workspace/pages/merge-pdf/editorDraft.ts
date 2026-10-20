@@ -13,10 +13,11 @@ export const updateDraftPages = (detail: MergePdfDetail, ids: number[], action: 
           CLASSIFICATION_SOURCE: 'USER' as const,
           CLASSIFICATION_CONFIDENCE: null,
           DESCRIPTION:
-            page.DESCRIPTION ||
-            (action.categoryId === 10
-              ? (detail.documents.find(doc => doc.DOCUMENT_ID === page.DOCUMENT_ID)?.DESCRIPTION ?? null)
-              : null)
+            action.categoryId === 10
+              ? page.DESCRIPTION ||
+                detail.documents.find(doc => doc.DOCUMENT_ID === page.DOCUMENT_ID)?.DESCRIPTION ||
+                null
+              : null
         }
       if (action.kind === 'rotate') return { ...page, ROTATION_DEGREES: (page.ROTATION_DEGREES + action.delta) % 360 }
       return page

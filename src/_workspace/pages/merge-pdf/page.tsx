@@ -146,12 +146,6 @@ const MergePdfPage = () => {
   const changeDraft = (change: (current: MergePdfDetail) => MergePdfDetail) => {
     const current = draftRef.current ?? detail
     if (!current) throw new Error('Document not loaded')
-    const missingDescription = current.pages.find(page => page.CATEGORY_ID === 10 && !page.DESCRIPTION?.trim())
-    if (missingDescription) {
-      setSelectedPageId(missingDescription.PAGE_ID)
-      setPreviewOpen(true)
-      throw new Error(`Enter a description for Other page ${missingDescription.SORT_ORDER} before saving`)
-    }
     const updated = change(current)
     draftRef.current = updated
     setWorkingDetail(updated)
@@ -162,20 +156,29 @@ const MergePdfPage = () => {
   const saveWork = async (mode: 'draft' | 'complete') => {
     const current = draftRef.current ?? detail
     if (!current) throw new Error('Document not loaded')
+    const missingDescription = current.pages.find(page => page.CATEGORY_ID === 10 && !page.DESCRIPTION?.trim())
+    if (missingDescription) {
+      setSelectedPageId(missingDescription.PAGE_ID)
+      setPreviewOpen(true)
+      throw new Error(`Enter a description for Other page ${missingDescription.SORT_ORDER} before saving`)
+    }
     const uploads = current.documents.filter(doc => doc.DOCUMENT_ID < 0)
     const response = await serverActions.saveEditor.mutateAsync({
       jobId: current.job.JOB_ID,
       rowVersion: current.job.ROW_VERSION,
       changes: {
-        pages: current.pages,
+        pages: current.pages.map(page => ({ ...page, DESCRIPTION: page.CATEGORY_ID === 10 ? page.DESCRIPTION : null })),
         documents: current.documents.map(doc => ({
           ...doc,
           DESCRIPTION:
-            doc.DESCRIPTION ||
-            current.pages
-              .find(page => page.DOCUMENT_ID === doc.DOCUMENT_ID && page.CATEGORY_ID === 10)
-              ?.DESCRIPTION?.trim() ||
-            null,
+            doc.CATEGORY_ID === 10 &&
+            current.pages.some(page => page.DOCUMENT_ID === doc.DOCUMENT_ID && page.CATEGORY_ID === 10)
+              ? doc.DESCRIPTION ||
+                current.pages
+                  .find(page => page.DOCUMENT_ID === doc.DOCUMENT_ID && page.CATEGORY_ID === 10)
+                  ?.DESCRIPTION?.trim() ||
+                null
+              : null,
           uploadIndex: doc.DOCUMENT_ID < 0 ? uploads.findIndex(item => item.DOCUMENT_ID === doc.DOCUMENT_ID) : undefined
         }))
       },
@@ -1373,7 +1376,7 @@ const MergePdfPage = () => {
                                 ? ' · Status 04 confirmed automatically'
                                 : ' · Status 04 confirmed'
                               : ''}
-                            {document.DESCRIPTION && (
+                            {document.CATEGORY_ID === 10 && document.DESCRIPTION && (
                               <Typography
                                 component='span'
                                 variant='caption'
@@ -1590,28 +1593,30 @@ const MergePdfPage = () => {
                   <Typography variant='body2' color='text.secondary'>
                     Source page {selectedPage.SOURCE_PAGE_NUMBER} · Rotation {selectedPage.ROTATION_DEGREES}°
                   </Typography>
-                  <CustomTextField
-                    label='Page description'
-                    fullWidth
-                    multiline
-                    minRows={3}
-                    maxRows={6}
-                    value={selectedPage.DESCRIPTION ?? ''}
-                    disabled={busy}
-                    required={selectedPage.CATEGORY_ID === 10}
-                    error={selectedPage.CATEGORY_ID === 10 && !selectedPage.DESCRIPTION?.trim()}
-                    helperText={selectedPage.CATEGORY_ID === 10 ? 'Required for Other pages' : undefined}
-                    inputProps={{ maxLength: 1000 }}
-                    onChange={event => {
-                      const value = event.target.value
-                      void changeDraft(current => ({
-                        ...current,
-                        pages: current.pages.map(page =>
-                          page.PAGE_ID === selectedPage.PAGE_ID ? { ...page, DESCRIPTION: value || null } : page
-                        )
-                      }))
-                    }}
-                  />
+                  {selectedPage.CATEGORY_ID === 10 && (
+                    <CustomTextField
+                      label='Page description'
+                      fullWidth
+                      multiline
+                      minRows={3}
+                      maxRows={6}
+                      value={selectedPage.DESCRIPTION ?? ''}
+                      disabled={busy}
+                      required={selectedPage.CATEGORY_ID === 10}
+                      error={selectedPage.CATEGORY_ID === 10 && !selectedPage.DESCRIPTION?.trim()}
+                      helperText={selectedPage.CATEGORY_ID === 10 ? 'Required for Other pages' : undefined}
+                      inputProps={{ maxLength: 1000 }}
+                      onChange={event => {
+                        const value = event.target.value
+                        void changeDraft(current => ({
+                          ...current,
+                          pages: current.pages.map(page =>
+                            page.PAGE_ID === selectedPage.PAGE_ID ? { ...page, DESCRIPTION: value || null } : page
+                          )
+                        }))
+                      }}
+                    />
+                  )}
                   <Box className='flex flex-wrap gap-2'>
                     <Button
                       variant='outlined'
