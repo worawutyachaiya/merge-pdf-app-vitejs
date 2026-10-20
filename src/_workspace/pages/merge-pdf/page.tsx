@@ -104,7 +104,12 @@ interface ImportFile {
   categoryId: number
   isDetecting: boolean
   typeSelected: boolean
+  description: string
+  hasOtherPages?: boolean
 }
+
+const isOtherImport = (file: ImportFile, mode: 'manual' | 'combined') =>
+  mode === 'manual' ? file.categoryId === 10 && (!file.isDetecting || file.typeSelected) : file.hasOtherPages === true
 
 const MergePdfPage = () => {
   const [selectedJobId, setSelectedJobId] = useState<number | null>(null)
@@ -114,8 +119,6 @@ const MergePdfPage = () => {
   const [selectedPageId, setSelectedPageId] = useState<number | null>(null)
   const [importMode, setImportMode] = useState<'manual' | 'combined'>('manual')
   const [files, setFiles] = useState<ImportFile[]>([])
-  const [importDescription, setImportDescription] = useState('')
-  const [descriptionRequired, setDescriptionRequired] = useState(false)
   const [busy, setBusy] = useState(false)
   const [confirmAction, setConfirmAction] = useState<Confirmation>(null)
   const [previewOpen, setPreviewOpen] = useState(false)
@@ -342,8 +345,6 @@ const MergePdfPage = () => {
     setMovePosition('')
     setImportMode('manual')
     setFiles([])
-    setImportDescription('')
-    setDescriptionRequired(false)
     setPreviewOpen(false)
     window.requestAnimationFrame(() => window.scrollTo({ top: 0 }))
   }
@@ -374,19 +375,21 @@ const MergePdfPage = () => {
   const importFiles = () =>
     run(async () => {
       if (!detail || !files.length || files.some(file => file.isDetecting)) return
-      const description = importDescription.trim() || null
-      const requireDescription = () => {
-        setDescriptionRequired(true)
-        const input = document.getElementById('merge-pdf-import-description')
-        input?.focus()
-        input?.scrollIntoView({ block: 'center', behavior: 'smooth' })
-        throw new Error('Enter a description before importing Other documents')
+      const requireDescription = (upload: ImportFile) => {
+        window.requestAnimationFrame(() => {
+          const input = document.getElementById(`merge-pdf-import-description-${upload.id}`)
+          input?.focus()
+          input?.scrollIntoView({ block: 'center', behavior: 'smooth' })
+        })
+        throw new Error(`Enter a description for ${upload.file.name} before importing`)
       }
-      if (!description && importMode === 'manual' && files.some(file => file.categoryId === 10)) requireDescription()
+      const missingDescription = files.find(file => isOtherImport(file, importMode) && !file.description.trim())
+      if (missingDescription) requireDescription(missingDescription)
       const ranks = await loadCategoryRanks()
       const preparedFiles: {
         upload: ImportFile
         prepared: Awaited<ReturnType<typeof MergePdfServices.prepareFile>>['data']['ResultOnDb'][number]
+        hasOther: boolean
       }[] = []
       let pageCount = (draftRef.current ?? detail).pages.length
       // Validate the whole batch before inserting any pages into the working document.
@@ -399,12 +402,20 @@ const MergePdfPage = () => {
         const hasOther = prepared.classifications
           ? prepared.classifications.some(page => page.categoryId === 10)
           : upload.categoryId === 10
-        if (hasOther && !description) requireDescription()
-        preparedFiles.push({ upload, prepared })
+        preparedFiles.push({ upload, prepared, hasOther })
       }
+      if (importMode === 'combined') {
+        const otherFiles = new Map(preparedFiles.map(item => [item.upload.id, item.hasOther]))
+        setFiles(current =>
+          current.map(file => ({ ...file, hasOtherPages: otherFiles.get(file.id) ?? file.hasOtherPages }))
+        )
+      }
+      const missingPreparedDescription = preparedFiles.find(item => item.hasOther && !item.upload.description.trim())
+      if (missingPreparedDescription) requireDescription(missingPreparedDescription.upload)
       let completed = 0
       try {
         for (const { upload, prepared } of preparedFiles) {
+          const description = upload.description.trim() || null
           const { file } = upload
           const documentId = temporaryId.current--
           const documentCategory = importMode === 'combined' ? 10 : upload.categoryId
@@ -449,10 +460,9 @@ const MergePdfPage = () => {
           })
           completed++
         }
-        setDescriptionRequired(false)
-        setImportDescription('')
       } finally {
-        setFiles(files.slice(completed))
+        const importedIds = new Set(preparedFiles.slice(0, completed).map(item => item.upload.id))
+        setFiles(current => current.filter(file => !importedIds.has(file.id)))
         const input = document.getElementById('merge-pdf-file-input') as HTMLInputElement | null
         if (input) input.value = ''
       }
@@ -721,7 +731,8 @@ const MergePdfPage = () => {
           file,
           categoryId: 10,
           isDetecting: importMode === 'manual',
-          typeSelected: false
+          typeSelected: false,
+          description: ''
         }))
         setFiles(current => [...current, ...uploads])
         if (importMode === 'manual') void detectImportTypes(uploads)
@@ -842,7 +853,6 @@ const MergePdfPage = () => {
                       onChange={(_, value) => {
                         setImportMode(value)
                         setFiles([])
-                        setDescriptionRequired(false)
                       }}
                       sx={{ mb: 4 }}
                     >
@@ -850,24 +860,6 @@ const MergePdfPage = () => {
                       <Tab value='combined' label='Combined file' disabled={busy} />
                     </Tabs>
                     <Stack spacing={4}>
-                      <CustomTextField
-                        id='merge-pdf-import-description'
-                        label='Description for Other documents'
-                        placeholder='Describe the Other documents in this import'
-                        fullWidth
-                        multiline
-                        minRows={3}
-                        maxRows={6}
-                        value={importDescription}
-                        disabled={busy}
-                        required={
-                          descriptionRequired || (importMode === 'manual' && files.some(file => file.categoryId === 10))
-                        }
-                        error={descriptionRequired && !importDescription.trim()}
-                        inputProps={{ maxLength: 1000 }}
-                        onChange={event => setImportDescription(event.target.value)}
-                        helperText='Required for Other pages. You can edit each page description after importing.'
-                      />
                       <Box
                         {...getRootProps()}
                         sx={{
@@ -935,6 +927,7 @@ const MergePdfPage = () => {
                             )}
                           </Box>
                           {files.map(upload => {
+                            const showDescription = isOtherImport(upload, importMode)
                             const extension = upload.file.name.split('.').pop()?.toUpperCase() ?? 'FILE'
                             const fileSize =
                               upload.file.size < 1024
@@ -952,7 +945,7 @@ const MergePdfPage = () => {
                                 }}
                               >
                                 <Grid container spacing={2} alignItems='center'>
-                                  <Grid size={{ xs: 12, sm: importMode === 'manual' ? 5 : 8 }}>
+                                  <Grid size={{ xs: 12, sm: showDescription ? 4 : importMode === 'manual' ? 5 : 8 }}>
                                     <Stack direction='row' spacing={2} alignItems='center' sx={{ minWidth: 0 }}>
                                       <Box
                                         sx={{
@@ -984,7 +977,12 @@ const MergePdfPage = () => {
                                       </Box>
                                     </Stack>
                                   </Grid>
-                                  <Grid size={{ xs: 10, sm: importMode === 'manual' ? 6 : 3 }}>
+                                  <Grid
+                                    size={{
+                                      xs: showDescription ? 12 : 10,
+                                      sm: showDescription ? 3 : importMode === 'manual' ? 6 : 3
+                                    }}
+                                  >
                                     {importMode === 'manual' ? (
                                       <SelectCustom
                                         inputId={`merge-pdf-document-type-${upload.id}`}
@@ -997,7 +995,6 @@ const MergePdfPage = () => {
                                         isDisabled={busy}
                                         onChange={option => {
                                           if (option) {
-                                            setDescriptionRequired(false)
                                             setFiles(current =>
                                               current.map(item =>
                                                 item.id === upload.id
@@ -1017,6 +1014,28 @@ const MergePdfPage = () => {
                                       />
                                     )}
                                   </Grid>
+                                  {showDescription && (
+                                    <Grid size={{ xs: 10, sm: 4 }}>
+                                      <CustomTextField
+                                        id={`merge-pdf-import-description-${upload.id}`}
+                                        label='Description'
+                                        required
+                                        fullWidth
+                                        placeholder='Describe this Other document'
+                                        value={upload.description}
+                                        disabled={busy}
+                                        inputProps={{ maxLength: 1000 }}
+                                        onChange={event => {
+                                          const description = event.target.value
+                                          setFiles(current =>
+                                            current.map(item =>
+                                              item.id === upload.id ? { ...item, description } : item
+                                            )
+                                          )
+                                        }}
+                                      />
+                                    </Grid>
+                                  )}
                                   <Grid size={{ xs: 2, sm: 1 }} sx={{ display: 'flex', justifyContent: 'flex-end' }}>
                                     <IconButton
                                       aria-label={`Remove ${upload.file.name}`}
@@ -1024,7 +1043,6 @@ const MergePdfPage = () => {
                                       color='error'
                                       onClick={() => {
                                         setFiles(current => current.filter(item => item.id !== upload.id))
-                                        setDescriptionRequired(false)
                                       }}
                                     >
                                       <i className='tabler-x' />
@@ -1044,9 +1062,7 @@ const MergePdfPage = () => {
                             busy ||
                             files.length === 0 ||
                             files.some(file => file.isDetecting) ||
-                            (!importDescription.trim() &&
-                              (descriptionRequired ||
-                                (importMode === 'manual' && files.some(file => file.categoryId === 10))))
+                            files.some(file => isOtherImport(file, importMode) && !file.description.trim())
                           }
                           onClick={() => void importFiles()}
                         >
