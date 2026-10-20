@@ -182,6 +182,11 @@ const SortablePage = ({
         >
           {document?.ORIGINAL_FILE_NAME ?? ''} · page {page.SOURCE_PAGE_NUMBER}
         </Typography>
+        {page.DESCRIPTION && (
+          <Typography variant='caption' display='block' noWrap title={page.DESCRIPTION}>
+            {page.DESCRIPTION}
+          </Typography>
+        )}
       </Box>
     </Box>
   )

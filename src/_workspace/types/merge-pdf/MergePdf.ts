@@ -30,6 +30,7 @@ export interface MergePdfDocument {
   PDF_PAGE_COUNT: number
   ENTRY_STATUS_CODE: string | null
   ENTRY_STATUS_SOURCE: string | null
+  DESCRIPTION: string | null
   UPLOAD_ORDER: number
 }
 
@@ -42,6 +43,7 @@ export interface MergePdfPage {
   CATEGORY_ID: number
   CLASSIFICATION_SOURCE: 'AUTO_TEXT' | 'AUTO_OCR' | 'FILENAME' | 'UNKNOWN' | 'USER' | null
   CLASSIFICATION_CONFIDENCE: number | null
+  DESCRIPTION: string | null
 }
 
 export interface MergePdfPublication {
