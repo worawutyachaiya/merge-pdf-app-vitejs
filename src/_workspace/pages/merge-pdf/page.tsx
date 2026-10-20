@@ -1290,7 +1290,7 @@ const MergePdfPage = () => {
                                 setStatusEditId(document.DOCUMENT_ID)
                               }}
                             >
-                              {document.ENTRY_STATUS_CODE === '04' ? 'Clear status 04' : 'Confirm status 04'}
+                              {document.ENTRY_STATUS_CODE === '04' ? 'Confirmed status 04' : 'Confirm status 04'}
                             </Button>
                           )}
                           <Button
@@ -1379,7 +1379,7 @@ const MergePdfPage = () => {
         isDelete={false}
         isLoading={busy}
         title='Create document'
-        description='Create a new document with an automatically assigned number?'
+        // description='Create a new document with an automatically assigned number?'
         confirmLabel='Create draft'
       />
       <Dialog
@@ -1574,17 +1574,17 @@ const MergePdfPage = () => {
                 ? 'Remove page'
                 : 'Remove document'
         }
-        description={
-          confirmAction?.kind === 'complete'
-            ? hasCompleted
-              ? `Save changes to ${currentPublication?.OUTPUT_FILE_NAME ?? detail?.job.JOB_CODE} at the same shared path?`
-              : 'Merge the pages in this order and save the PDF to the shared folder?'
-            : confirmAction?.kind === 'pages'
-              ? `Remove all ${confirmAction.ids.length} selected pages from this document?`
-              : confirmAction?.kind === 'page'
-                ? 'Remove this page from this document?'
-                : 'Remove this source document and all of its pages?'
-        }
+        // description={
+        //   confirmAction?.kind === 'complete'
+        //     ? hasCompleted
+        //       ? `Save changes to ${currentPublication?.OUTPUT_FILE_NAME ?? detail?.job.JOB_CODE} at the same shared path?`
+        //       : 'Merge the pages in this order and save the PDF to the shared folder?'
+        //     : confirmAction?.kind === 'pages'
+        //       ? `Remove all ${confirmAction.ids.length} selected pages from this document?`
+        //       : confirmAction?.kind === 'page'
+        //         ? 'Remove this page from this document?'
+        //         : 'Remove this source document and all of its pages?'
+        // }
         confirmLabel={
           confirmAction?.kind === 'complete' ? (hasCompleted ? 'Save Changes' : 'Save & Complete') : 'Remove'
         }
@@ -1595,11 +1595,11 @@ const MergePdfPage = () => {
         onCloseClick={() => setStatusEditId(null)}
         isLoading={busy}
         title='Import entry status 04'
-        description={
-          detail?.documents.find(document => document.DOCUMENT_ID === statusEditId)?.ENTRY_STATUS_CODE === '04'
-            ? 'Clear the status 04 confirmation for this source document?'
-            : 'Have you checked the source document and confirmed that the Import entry status is 04?'
-        }
+        // description={
+        //   detail?.documents.find(document => document.DOCUMENT_ID === statusEditId)?.ENTRY_STATUS_CODE === '04'
+        //     ? 'Clear the status 04 confirmation for this source document?'
+        //     : 'Have you checked the source document and confirmed that the Import entry status is 04?'
+        // }
         confirmLabel={
           documentsById.get(statusEditId ?? 0)?.ENTRY_STATUS_CODE === '04' ? 'Clear status 04' : 'Confirm status 04'
         }
