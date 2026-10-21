@@ -40,10 +40,11 @@ export default class MergePdfServices {
     })
   }
 
-  static prepareFile(file: File, combined: boolean) {
+  static prepareFile(file: File, combined: boolean, categoryId = 10) {
     const data = new FormData()
     data.append('file', file)
     data.append('combined', String(combined))
+    data.append('categoryId', String(categoryId))
     return auditRequest<
       ResultDataResponseI<{
         sourceType: 'PDF' | 'EXCEL' | 'IMAGE'
@@ -51,6 +52,8 @@ export default class MergePdfServices {
         pdf: string
         thumbnails: string[]
         classifications: { categoryId: number; source: 'AUTO_TEXT' | 'UNKNOWN'; confidence: number | null }[] | null
+        entryStatusCode: '04' | null
+        entryStatusSource: 'DOCUMENT' | null
       }>
     >({
       url: `${root}/editor/prepare`,
@@ -163,11 +166,19 @@ export default class MergePdfServices {
     })
   }
 
-  static upload(jobId: number, rowVersion: number, categoryId: number, entryStatusCode: string | null, file: File) {
+  static upload(
+    jobId: number,
+    rowVersion: number,
+    categoryId: number,
+    entryStatusCode: string | null,
+    file: File,
+    description?: string
+  ) {
     const form = new FormData()
     form.append('rowVersion', String(rowVersion))
     form.append('categoryId', String(categoryId))
     if (entryStatusCode) form.append('entryStatusCode', entryStatusCode)
+    if (description) form.append('description', description)
     form.append('file', file)
     return auditRequest<ResultDataResponseI<MergePdfDetail>>({
       url: `${root}/jobs/${jobId}/documents`,
@@ -178,9 +189,10 @@ export default class MergePdfServices {
     })
   }
 
-  static combinedUpload(jobId: number, rowVersion: number, file: File) {
+  static combinedUpload(jobId: number, rowVersion: number, file: File, description?: string) {
     const form = new FormData()
     form.append('rowVersion', String(rowVersion))
+    if (description) form.append('description', description)
     form.append('file', file)
     return auditRequest<ResultDataResponseI<MergePdfDetail>>({
       url: `${root}/jobs/${jobId}/combined-documents`,

@@ -104,7 +104,12 @@ interface ImportFile {
   categoryId: number
   isDetecting: boolean
   typeSelected: boolean
+  description: string
+  hasOtherPages?: boolean
 }
+
+const isOtherImport = (file: ImportFile, mode: 'manual' | 'combined') =>
+  mode === 'manual' ? file.categoryId === 10 && (!file.isDetecting || file.typeSelected) : file.hasOtherPages === true
 
 const MergePdfPage = () => {
   const [selectedJobId, setSelectedJobId] = useState<number | null>(null)
@@ -151,14 +156,29 @@ const MergePdfPage = () => {
   const saveWork = async (mode: 'draft' | 'complete') => {
     const current = draftRef.current ?? detail
     if (!current) throw new Error('Document not loaded')
+    const missingDescription = current.pages.find(page => page.CATEGORY_ID === 10 && !page.DESCRIPTION?.trim())
+    if (missingDescription) {
+      setSelectedPageId(missingDescription.PAGE_ID)
+      setPreviewOpen(true)
+      throw new Error(`Enter a description for Other page ${missingDescription.SORT_ORDER} before saving`)
+    }
     const uploads = current.documents.filter(doc => doc.DOCUMENT_ID < 0)
     const response = await serverActions.saveEditor.mutateAsync({
       jobId: current.job.JOB_ID,
       rowVersion: current.job.ROW_VERSION,
       changes: {
-        pages: current.pages,
+        pages: current.pages.map(page => ({ ...page, DESCRIPTION: page.CATEGORY_ID === 10 ? page.DESCRIPTION : null })),
         documents: current.documents.map(doc => ({
           ...doc,
+          DESCRIPTION:
+            doc.CATEGORY_ID === 10 &&
+            current.pages.some(page => page.DOCUMENT_ID === doc.DOCUMENT_ID && page.CATEGORY_ID === 10)
+              ? doc.DESCRIPTION ||
+                current.pages
+                  .find(page => page.DOCUMENT_ID === doc.DOCUMENT_ID && page.CATEGORY_ID === 10)
+                  ?.DESCRIPTION?.trim() ||
+                null
+              : null,
           uploadIndex: doc.DOCUMENT_ID < 0 ? uploads.findIndex(item => item.DOCUMENT_ID === doc.DOCUMENT_ID) : undefined
         }))
       },
@@ -358,16 +378,48 @@ const MergePdfPage = () => {
   const importFiles = () =>
     run(async () => {
       if (!detail || !files.length || files.some(file => file.isDetecting)) return
+      const requireDescription = (upload: ImportFile) => {
+        window.requestAnimationFrame(() => {
+          const input = document.getElementById(`merge-pdf-import-description-${upload.id}`)
+          input?.focus()
+          input?.scrollIntoView({ block: 'center', behavior: 'smooth' })
+        })
+        throw new Error(`Enter a description for ${upload.file.name} before importing`)
+      }
+      const missingDescription = files.find(file => isOtherImport(file, importMode) && !file.description.trim())
+      if (missingDescription) requireDescription(missingDescription)
       const ranks = await loadCategoryRanks()
+      const preparedFiles: {
+        upload: ImportFile
+        prepared: Awaited<ReturnType<typeof MergePdfServices.prepareFile>>['data']['ResultOnDb'][number]
+        hasOther: boolean
+      }[] = []
+      let pageCount = (draftRef.current ?? detail).pages.length
+      // Validate the whole batch before inserting any pages into the working document.
+      for (const upload of files) {
+        const response = await MergePdfServices.prepareFile(upload.file, importMode === 'combined', upload.categoryId)
+        const prepared = response.data.ResultOnDb[0]
+        if (!response.data.Status || !prepared) throw new Error(response.data.Message)
+        pageCount += prepared.pageCount
+        if (pageCount > 500) throw new Error('Document exceeds 500 pages')
+        const hasOther = prepared.classifications
+          ? prepared.classifications.some(page => page.categoryId === 10)
+          : upload.categoryId === 10
+        preparedFiles.push({ upload, prepared, hasOther })
+      }
+      if (importMode === 'combined') {
+        const otherFiles = new Map(preparedFiles.map(item => [item.upload.id, item.hasOther]))
+        setFiles(current =>
+          current.map(file => ({ ...file, hasOtherPages: otherFiles.get(file.id) ?? file.hasOtherPages }))
+        )
+      }
+      const missingPreparedDescription = preparedFiles.find(item => item.hasOther && !item.upload.description.trim())
+      if (missingPreparedDescription) requireDescription(missingPreparedDescription.upload)
       let completed = 0
       try {
-        for (const upload of files) {
+        for (const { upload, prepared } of preparedFiles) {
+          const description = upload.description.trim() || null
           const { file } = upload
-          const response = await MergePdfServices.prepareFile(file, importMode === 'combined')
-          const prepared = response.data.ResultOnDb[0]
-          if (!response.data.Status || !prepared) throw new Error(response.data.Message)
-          if ((draftRef.current ?? detail).pages.length + prepared.pageCount > 500)
-            throw new Error('Document exceeds 500 pages')
           const documentId = temporaryId.current--
           const documentCategory = importMode === 'combined' ? 10 : upload.categoryId
           const pages = Array.from({ length: prepared.pageCount }, (_, index) => ({
@@ -378,7 +430,8 @@ const MergePdfPage = () => {
             ROTATION_DEGREES: 0,
             CATEGORY_ID: prepared.classifications?.[index].categoryId ?? documentCategory,
             CLASSIFICATION_SOURCE: prepared.classifications?.[index].source ?? ('USER' as const),
-            CLASSIFICATION_CONFIDENCE: prepared.classifications?.[index].confidence ?? null
+            CLASSIFICATION_CONFIDENCE: prepared.classifications?.[index].confidence ?? null,
+            DESCRIPTION: (prepared.classifications?.[index].categoryId ?? documentCategory) === 10 ? description : null
           }))
           setPendingUploads(current => ({
             ...current,
@@ -399,8 +452,9 @@ const MergePdfPage = () => {
                   ORIGINAL_FILE_NAME: file.name,
                   SOURCE_TYPE: prepared.sourceType,
                   PDF_PAGE_COUNT: prepared.pageCount,
-                  ENTRY_STATUS_CODE: null,
-                  ENTRY_STATUS_SOURCE: null,
+                  ENTRY_STATUS_CODE: prepared.entryStatusCode,
+                  ENTRY_STATUS_SOURCE: prepared.entryStatusSource,
+                  DESCRIPTION: pages.some(page => page.CATEGORY_ID === 10) ? description : null,
                   UPLOAD_ORDER: current.documents.length + 1
                 }
               ],
@@ -410,7 +464,8 @@ const MergePdfPage = () => {
           completed++
         }
       } finally {
-        setFiles(files.slice(completed))
+        const importedIds = new Set(preparedFiles.slice(0, completed).map(item => item.upload.id))
+        setFiles(current => current.filter(file => !importedIds.has(file.id)))
         const input = document.getElementById('merge-pdf-file-input') as HTMLInputElement | null
         if (input) input.value = ''
       }
@@ -679,7 +734,8 @@ const MergePdfPage = () => {
           file,
           categoryId: 10,
           isDetecting: importMode === 'manual',
-          typeSelected: false
+          typeSelected: false,
+          description: ''
         }))
         setFiles(current => [...current, ...uploads])
         if (importMode === 'manual') void detectImportTypes(uploads)
@@ -874,6 +930,7 @@ const MergePdfPage = () => {
                             )}
                           </Box>
                           {files.map(upload => {
+                            const showDescription = isOtherImport(upload, importMode)
                             const extension = upload.file.name.split('.').pop()?.toUpperCase() ?? 'FILE'
                             const fileSize =
                               upload.file.size < 1024
@@ -891,7 +948,7 @@ const MergePdfPage = () => {
                                 }}
                               >
                                 <Grid container spacing={2} alignItems='center'>
-                                  <Grid size={{ xs: 12, sm: importMode === 'manual' ? 5 : 8 }}>
+                                  <Grid size={{ xs: 12, sm: showDescription ? 4 : importMode === 'manual' ? 5 : 8 }}>
                                     <Stack direction='row' spacing={2} alignItems='center' sx={{ minWidth: 0 }}>
                                       <Box
                                         sx={{
@@ -923,7 +980,12 @@ const MergePdfPage = () => {
                                       </Box>
                                     </Stack>
                                   </Grid>
-                                  <Grid size={{ xs: 10, sm: importMode === 'manual' ? 6 : 3 }}>
+                                  <Grid
+                                    size={{
+                                      xs: showDescription ? 12 : 10,
+                                      sm: showDescription ? 3 : importMode === 'manual' ? 6 : 3
+                                    }}
+                                  >
                                     {importMode === 'manual' ? (
                                       <SelectCustom
                                         inputId={`merge-pdf-document-type-${upload.id}`}
@@ -955,12 +1017,36 @@ const MergePdfPage = () => {
                                       />
                                     )}
                                   </Grid>
+                                  {showDescription && (
+                                    <Grid size={{ xs: 10, sm: 4 }}>
+                                      <CustomTextField
+                                        id={`merge-pdf-import-description-${upload.id}`}
+                                        label='Description'
+                                        required
+                                        fullWidth
+                                        placeholder='Describe this Other document'
+                                        value={upload.description}
+                                        disabled={busy}
+                                        inputProps={{ maxLength: 1000 }}
+                                        onChange={event => {
+                                          const description = event.target.value
+                                          setFiles(current =>
+                                            current.map(item =>
+                                              item.id === upload.id ? { ...item, description } : item
+                                            )
+                                          )
+                                        }}
+                                      />
+                                    </Grid>
+                                  )}
                                   <Grid size={{ xs: 2, sm: 1 }} sx={{ display: 'flex', justifyContent: 'flex-end' }}>
                                     <IconButton
                                       aria-label={`Remove ${upload.file.name}`}
                                       disabled={busy}
                                       color='error'
-                                      onClick={() => setFiles(current => current.filter(item => item.id !== upload.id))}
+                                      onClick={() => {
+                                        setFiles(current => current.filter(item => item.id !== upload.id))
+                                      }}
                                     >
                                       <i className='tabler-x' />
                                     </IconButton>
@@ -975,7 +1061,12 @@ const MergePdfPage = () => {
                         <Button
                           variant='contained'
                           color='primary'
-                          disabled={busy || files.length === 0 || files.some(file => file.isDetecting)}
+                          disabled={
+                            busy ||
+                            files.length === 0 ||
+                            files.some(file => file.isDetecting) ||
+                            files.some(file => isOtherImport(file, importMode) && !file.description.trim())
+                          }
                           onClick={() => void importFiles()}
                         >
                           {busy ? 'Importing ...' : 'Import'}
@@ -1280,7 +1371,21 @@ const MergePdfPage = () => {
                               {document.ORIGINAL_FILE_NAME}
                             </Button>{' '}
                             ({document.PDF_PAGE_COUNT} page(s))
-                            {document.ENTRY_STATUS_CODE === '04' ? ' · Status 04 confirmed' : ''}
+                            {document.ENTRY_STATUS_CODE === '04'
+                              ? document.ENTRY_STATUS_SOURCE === 'DOCUMENT'
+                                ? ' · Status 04 confirmed automatically'
+                                : ' · Status 04 confirmed'
+                              : ''}
+                            {document.CATEGORY_ID === 10 && document.DESCRIPTION && (
+                              <Typography
+                                component='span'
+                                variant='caption'
+                                display='block'
+                                sx={{ mt: 1, whiteSpace: 'pre-wrap' }}
+                              >
+                                {document.DESCRIPTION}
+                              </Typography>
+                            )}
                           </Typography>
                           {importEntryDocumentIds.has(document.DOCUMENT_ID) && (
                             <Button
@@ -1290,7 +1395,7 @@ const MergePdfPage = () => {
                                 setStatusEditId(document.DOCUMENT_ID)
                               }}
                             >
-                              {document.ENTRY_STATUS_CODE === '04' ? 'Confirmed status 04' : 'Confirm status 04'}
+                              {document.ENTRY_STATUS_CODE === '04' ? 'Confirmed Status 04' : 'Confirm Status 04'}
                             </Button>
                           )}
                           <Button
@@ -1488,6 +1593,30 @@ const MergePdfPage = () => {
                   <Typography variant='body2' color='text.secondary'>
                     Source page {selectedPage.SOURCE_PAGE_NUMBER} · Rotation {selectedPage.ROTATION_DEGREES}°
                   </Typography>
+                  {selectedPage.CATEGORY_ID === 10 && (
+                    <CustomTextField
+                      label='Page description'
+                      fullWidth
+                      multiline
+                      minRows={3}
+                      maxRows={6}
+                      value={selectedPage.DESCRIPTION ?? ''}
+                      disabled={busy}
+                      required={selectedPage.CATEGORY_ID === 10}
+                      error={selectedPage.CATEGORY_ID === 10 && !selectedPage.DESCRIPTION?.trim()}
+                      helperText={selectedPage.CATEGORY_ID === 10 ? 'Required for Other pages' : undefined}
+                      inputProps={{ maxLength: 1000 }}
+                      onChange={event => {
+                        const value = event.target.value
+                        void changeDraft(current => ({
+                          ...current,
+                          pages: current.pages.map(page =>
+                            page.PAGE_ID === selectedPage.PAGE_ID ? { ...page, DESCRIPTION: value || null } : page
+                          )
+                        }))
+                      }}
+                    />
+                  )}
                   <Box className='flex flex-wrap gap-2'>
                     <Button
                       variant='outlined'
@@ -1513,7 +1642,7 @@ const MergePdfPage = () => {
                       }}
                     >
                       {documentsById.get(selectedPage.DOCUMENT_ID)?.ENTRY_STATUS_CODE === '04'
-                        ? 'Clear status 04'
+                        ? 'Confirmed Status 04'
                         : 'Confirm status 04'}
                     </Button>
                   )}
@@ -1594,14 +1723,16 @@ const MergePdfPage = () => {
         onConfirmClick={() => void saveEntryStatus()}
         onCloseClick={() => setStatusEditId(null)}
         isLoading={busy}
-        title='Import entry status 04'
-        // description={
-        //   detail?.documents.find(document => document.DOCUMENT_ID === statusEditId)?.ENTRY_STATUS_CODE === '04'
-        //     ? 'Clear the status 04 confirmation for this source document?'
-        //     : 'Have you checked the source document and confirmed that the Import entry status is 04?'
-        // }
+        title={
+          documentsById.get(statusEditId ?? 0)?.ENTRY_STATUS_CODE === '04' ? 'Confirmed Status 04' : 'Confirm Status 04'
+        }
+        description={
+          documentsById.get(statusEditId ?? 0)?.ENTRY_STATUS_CODE === '04'
+            ? 'Status 04 is confirmed for this source document. Do you want to remove the confirmation?'
+            : 'Have you checked the source document and confirmed that the Import entry status is 04?'
+        }
         confirmLabel={
-          documentsById.get(statusEditId ?? 0)?.ENTRY_STATUS_CODE === '04' ? 'Clear status 04' : 'Confirm status 04'
+          documentsById.get(statusEditId ?? 0)?.ENTRY_STATUS_CODE === '04' ? 'Remove confirmation' : 'Confirm Status 04'
         }
       />
     </Grid>
