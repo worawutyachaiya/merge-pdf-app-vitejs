@@ -1,5 +1,5 @@
 // React Imports
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 // react-hook-form Imports
 import { useWatch } from 'react-hook-form'
@@ -16,9 +16,11 @@ import { getUserData } from '@utils/user-profile/userLoginProfile'
 interface Props {
   MENU_ID: number
   searchFiltersData: object
+  searchResultsMetadata?: Record<string, unknown>
+  saveOnMount?: boolean
 }
 
-function DxWatchSearchFilters({ MENU_ID, searchFiltersData }: Props) {
+function DxWatchSearchFilters({ MENU_ID, searchFiltersData, searchResultsMetadata, saveOnMount = false }: Props) {
   const data = useWatch({
     name: [
       'searchResults.pageSize',
@@ -34,6 +36,8 @@ function DxWatchSearchFilters({ MENU_ID, searchFiltersData }: Props) {
   })
 
   const [isFirstMount, setIsFirstMount] = useState(true)
+  const initialSaveStarted = useRef(false)
+  const migrationSaveQueue = useRef<Promise<void>>(Promise.resolve())
 
   // react-query
   const handleAdd = (data: Array<any>) => {
@@ -61,12 +65,20 @@ function DxWatchSearchFilters({ MENU_ID, searchFiltersData }: Props) {
           columnVisibility: data[4],
           columnPinning: data[5],
           columnOrder: data[6],
-          columnFilterFns: data[7]
+          columnFilterFns: data[7],
+          ...searchResultsMetadata
         }
       }
     }
 
-    mutate(dataItem)
+    if (saveOnMount) {
+      // Keep the one-time migration save ahead of any subsequent user changes.
+      migrationSaveQueue.current = migrationSaveQueue.current
+        .then(async () => { await mutateAsync(dataItem) })
+        .catch(() => undefined)
+    } else {
+      mutate(dataItem)
+    }
   }
 
   const onMutateSuccess = () => {
@@ -77,7 +89,17 @@ function DxWatchSearchFilters({ MENU_ID, searchFiltersData }: Props) {
     console.log('onMutateError', e)
   }
 
-  const { mutate, isError, error } = useCreate(onMutateSuccess, onMutateError)
+  const { mutate, mutateAsync, isError, error } = useCreate(onMutateSuccess, onMutateError)
+
+  // Persist an explicitly requested one-time settings migration as soon as it is loaded.
+  useEffect(() => {
+    if (saveOnMount && !initialSaveStarted.current) {
+      initialSaveStarted.current = true
+      handleAdd(data)
+    }
+    // This initial save intentionally uses the settings loaded at mount.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const [,] = useDebounce(
     () => {

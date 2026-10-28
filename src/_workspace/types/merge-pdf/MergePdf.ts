@@ -39,6 +39,7 @@ export interface MergePdfPage {
   DOCUMENT_ID: number
   SOURCE_PAGE_NUMBER: number
   ROTATION_DEGREES: number
+  DESKEW_DEGREES: number
   SORT_ORDER: number
   CATEGORY_ID: number
   CLASSIFICATION_SOURCE: 'AUTO_TEXT' | 'AUTO_OCR' | 'FILENAME' | 'UNKNOWN' | 'USER' | null
@@ -50,6 +51,7 @@ export interface MergePdfPublication {
   PUBLICATION_ID: number
   PUBLICATION_VERSION: number
   STATUS: 'PENDING' | 'PUBLISHED' | 'FAILED'
+  SHARE_PATH?: string | null
   OUTPUT_FILE_NAME: string
   NETWORK_PATH: string | null
   PUBLISHED_AT: string | null
@@ -63,6 +65,7 @@ export interface MergePdfDetail {
 }
 
 export interface MergePdfForm {
+  month?: string
   title: string
   reference: string | null
 }

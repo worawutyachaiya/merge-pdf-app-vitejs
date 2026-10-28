@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type PointerEvent } from 'react'
 
 import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
@@ -19,6 +19,7 @@ interface Props {
   onRemove: () => void
   checked: boolean
   onCheck: (checked: boolean) => void
+  onPaintStart: (event: PointerEvent<HTMLButtonElement>) => void
   localImage?: string
 }
 
@@ -33,6 +34,7 @@ const SortablePage = ({
   onRemove,
   checked,
   onCheck,
+  onPaintStart,
   localImage
 }: Props) => {
   const [visible, setVisible] = useState(false)
@@ -60,11 +62,7 @@ const SortablePage = ({
         setNodeRef(node as HTMLElement | null)
         cardRef.current = node as HTMLDivElement | null
       }}
-      onPointerDown={event => {
-        // Action controls keep their normal clicks; the rest of the card starts a drag.
-        if (event.target instanceof Element && event.target.closest('[data-page-action]')) return
-        listeners?.onPointerDown?.(event)
-      }}
+      data-select-page-id={page.PAGE_ID}
       sx={{
         transform: CSS.Transform.toString(transform),
         transition,
@@ -77,7 +75,7 @@ const SortablePage = ({
         overflow: 'hidden',
         boxShadow: isDragging ? 6 : 1,
         minWidth: 0,
-        cursor: disabled ? 'default' : isDragging ? 'grabbing' : 'grab',
+        cursor: 'default',
         touchAction: 'none',
         userSelect: 'none'
       }}
@@ -99,8 +97,8 @@ const SortablePage = ({
           title='Drag to reorder'
           disabled={disabled}
           {...attributes}
-          onKeyDown={event => listeners?.onKeyDown?.(event)}
-          sx={{ cursor: disabled ? 'default' : 'grab', touchAction: 'none' }}
+          {...listeners}
+          sx={{ cursor: disabled ? 'default' : 'move', touchAction: 'none' }}
         >
           <i className='tabler-grip-vertical' />
         </IconButton>
@@ -138,6 +136,7 @@ const SortablePage = ({
       <Box
         component='button'
         type='button'
+        onPointerDown={onPaintStart}
         onClick={onSelect}
         aria-label={`Preview page ${page.SORT_ORDER}`}
         sx={{
@@ -146,7 +145,7 @@ const SortablePage = ({
           p: 1,
           border: 0,
           bgcolor: 'transparent',
-          cursor: 'inherit',
+          cursor: disabled ? 'default' : 'pointer',
           textAlign: 'left'
         }}
       >
@@ -164,6 +163,7 @@ const SortablePage = ({
             jobId={jobId}
             pageId={page.PAGE_ID}
             rotation={page.ROTATION_DEGREES}
+            deskew={page.DESKEW_DEGREES ?? 0}
             enabled={visible}
             label={`Page ${page.SORT_ORDER} preview`}
             localImage={localImage}

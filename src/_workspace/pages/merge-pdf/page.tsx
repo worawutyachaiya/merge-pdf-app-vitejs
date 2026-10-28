@@ -29,6 +29,7 @@ import {
   DialogContent,
   DialogTitle,
   Grid,
+  GlobalStyles,
   Tab,
   Stack,
   Tabs,
@@ -59,6 +60,8 @@ import DialogCloseButton from '@/components/dialogs/DialogCloseButton'
 import Transition from '@/components/TransitionDialog'
 
 import SortablePage from './SortablePage'
+import PreviewThumbnail from './PreviewThumbnail'
+import FitPagePreview from './FitPagePreview'
 import MergePdfList from './MergePdfList'
 import MergePdfPageThumbnail from './MergePdfPageThumbnail'
 import { breadcrumbNavigation, MENU_NAME } from './env'
@@ -122,11 +125,63 @@ const MergePdfPage = () => {
   const [busy, setBusy] = useState(false)
   const [confirmAction, setConfirmAction] = useState<Confirmation>(null)
   const [previewOpen, setPreviewOpen] = useState(false)
+  const [deskewInput, setDeskewInput] = useState('0')
   const [statusEditId, setStatusEditId] = useState<number | null>(null)
   const [movePosition, setMovePosition] = useState('')
   const [checkedPageIds, setCheckedPageIds] = useState<number[]>([])
   const [batchCategoryId, setBatchCategoryId] = useState<number | null>(null)
-  const nextCodeQuery = useMergePdfNextCode(editorMode === 'Add' && selectedJobId === null)
+  const [documentMonth, setDocumentMonth] = useState(() => new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Bangkok', year: 'numeric', month: '2-digit' }).format(new Date()))
+  const nextCodeQuery = useMergePdfNextCode(editorMode === 'Add' && selectedJobId === null && !!documentMonth, documentMonth)
+  const painted = useRef(false)
+  const paintGesture = useRef<{ pointerId: number; startId: number; x: number; y: number; lastX: number; lastY: number } | null>(null)
+  const pendingPaintIds = useRef(new Set<number>())
+  const paintFrame = useRef<number | null>(null)
+  useEffect(() => {
+    const flush = () => {
+      paintFrame.current = null
+      const additions = [...pendingPaintIds.current]
+      pendingPaintIds.current.clear()
+      if (additions.length) setCheckedPageIds(ids => {
+        const selected = new Set(ids)
+        let changed = false
+        for (const id of additions) if (!selected.has(id)) { selected.add(id); changed = true }
+        return changed ? [...selected] : ids
+      })
+    }
+    const move = (event: PointerEvent) => {
+      const gesture = paintGesture.current
+      if (!gesture || event.pointerId !== gesture.pointerId) return
+      if (!painted.current && Math.hypot(event.clientX - gesture.x, event.clientY - gesture.y) < 6) return
+      if (!painted.current) pendingPaintIds.current.add(gesture.startId)
+      painted.current = true
+      const distance = Math.hypot(event.clientX - gesture.lastX, event.clientY - gesture.lastY)
+      const steps = Math.max(1, Math.ceil(distance / 24))
+      for (let i = 1; i <= steps; i++) {
+        const x = gesture.lastX + (event.clientX - gesture.lastX) * i / steps
+        const y = gesture.lastY + (event.clientY - gesture.lastY) * i / steps
+        const card = document.elementFromPoint(x, y)?.closest<HTMLElement>('[data-select-page-id]')
+        if (card?.dataset.selectPageId) pendingPaintIds.current.add(Number(card.dataset.selectPageId))
+      }
+      gesture.lastX = event.clientX
+      gesture.lastY = event.clientY
+      if (paintFrame.current === null) paintFrame.current = requestAnimationFrame(flush)
+    }
+    const stop = (event: PointerEvent) => {
+      if (paintGesture.current?.pointerId !== event.pointerId) return
+      paintGesture.current = null
+      if (paintFrame.current !== null) cancelAnimationFrame(paintFrame.current)
+      flush()
+    }
+    window.addEventListener('pointermove', move)
+    window.addEventListener('pointerup', stop)
+    window.addEventListener('pointercancel', stop)
+    return () => {
+      window.removeEventListener('pointermove', move)
+      window.removeEventListener('pointerup', stop)
+      window.removeEventListener('pointercancel', stop)
+      if (paintFrame.current !== null) cancelAnimationFrame(paintFrame.current)
+    }
+  }, [])
   const [bulkPosition, setBulkPosition] = useState('')
   const [jumpPosition, setJumpPosition] = useState('')
   const [draggedPageId, setDraggedPageId] = useState<number | null>(null)
@@ -249,11 +304,13 @@ const MergePdfPage = () => {
     }
   }
   const selectedPage = detail?.pages.find(page => page.PAGE_ID === selectedPageId) ?? detail?.pages[0]
+  useEffect(() => { setDeskewInput(String(selectedPage?.DESKEW_DEGREES ?? 0)) }, [selectedPage?.PAGE_ID, selectedPage?.DESKEW_DEGREES, previewOpen])
   const selectedPageIndex = detail?.pages.findIndex(page => page.PAGE_ID === selectedPage?.PAGE_ID) ?? -1
   const previewQuery = useMergePdfPagePreview(
     detail?.job.JOB_ID ?? null,
     selectedPage?.PAGE_ID ?? null,
     selectedPage?.ROTATION_DEGREES ?? 0,
+    selectedPage?.DESKEW_DEGREES ?? 0,
     previewOpen,
     selectedPage ? pendingUploads[selectedPage.DOCUMENT_ID]?.pdf : undefined,
     selectedPage?.SOURCE_PAGE_NUMBER
@@ -355,7 +412,7 @@ const MergePdfPage = () => {
   const createDraft = () =>
     run(async () => {
       const values = mergePdfFormSchema.parse(getValues())
-      const created = firstDetail(await actions.create.mutateAsync({ title: values.title, reference: null }))
+      const created = firstDetail(await actions.create.mutateAsync({ title: values.title, reference: null, month: documentMonth }))
       reset(values)
       setSelectedJobId(created.job.JOB_ID)
       setCreateConfirmOpen(false)
@@ -428,6 +485,7 @@ const MergePdfPage = () => {
             SOURCE_PAGE_NUMBER: index + 1,
             SORT_ORDER: 0,
             ROTATION_DEGREES: 0,
+            DESKEW_DEGREES: 0,
             CATEGORY_ID: prepared.classifications?.[index].categoryId ?? documentCategory,
             CLASSIFICATION_SOURCE: prepared.classifications?.[index].source ?? ('USER' as const),
             CLASSIFICATION_CONFIDENCE: prepared.classifications?.[index].confidence ?? null,
@@ -591,6 +649,15 @@ const MergePdfPage = () => {
     })
   }
 
+  const removePages = (ids: number[]) => {
+    if (!detail || !ids.length) return
+    void run(async () => {
+      firstDetail(await actions.batchPages.mutateAsync({ jobId: detail.job.JOB_ID, rowVersion: detail.job.ROW_VERSION, pageIds: ids, action: { kind: 'remove' } }))
+      setCheckedPageIds(current => current.filter(id => !ids.includes(id)))
+      if (selectedPageId !== null && ids.includes(selectedPageId)) { setPreviewOpen(false); setSelectedPageId(null) }
+    })
+  }
+
   const confirm = () =>
     run(
       async () => {
@@ -635,11 +702,7 @@ const MergePdfPage = () => {
         }
         setConfirmAction(null)
       },
-      confirmAction?.kind === 'complete'
-        ? 'Merged PDF saved'
-        : confirmAction?.kind === 'document'
-          ? 'Source document removed from current edits. Save to apply.'
-          : 'Page(s) removed from current edits. Save to apply.'
+      confirmAction?.kind === 'complete' ? 'Merged PDF saved' : undefined
     )
 
   const download = (publicationId: number, fileName: string) =>
@@ -800,7 +863,7 @@ const MergePdfPage = () => {
                 }
               />
               <CardContent>
-                <Grid container spacing={4} alignItems='flex-end'>
+                <Grid container spacing={4} alignItems='flex-start'>
                   <Grid size={{ xs: 12, md: 7 }}>
                     <CustomTextField
                       label='Document name (Auto)'
@@ -824,8 +887,14 @@ const MergePdfPage = () => {
                       }
                     />
                   </Grid>
+                  {editorMode === 'Add' && !detail && (
+                    <Grid size={{ xs: 12, md: 3 }}>
+                      <CustomTextField fullWidth type='month' label='Document month' slotProps={{ input: { sx: { height: 44 } } }} value={documentMonth}
+                        onChange={event => setDocumentMonth(event.target.value)} />
+                    </Grid>
+                  )}
                   {currentPublication && (
-                    <Grid size={{ xs: 12, md: 5 }}>
+                    <Grid size={{ xs: 12, md: 5 }} sx={{ alignSelf: 'flex-end' }}>
                       <Button
                         variant='outlined'
                         sx={{ height: 44 }}
@@ -1273,7 +1342,7 @@ const MergePdfPage = () => {
                               sx={{ height: 40 }}
                               startIcon={<i className='tabler-trash' />}
                               disabled={busy}
-                              onClick={() => setConfirmAction({ kind: 'pages', ids: [...activeCheckedIds] })}
+                              onClick={() => removePages(activeCheckedIds)}
                             >
                               Remove
                             </Button>
@@ -1281,6 +1350,8 @@ const MergePdfPage = () => {
                         </Box>
                       )}
                     </Box>
+                    <Typography variant='caption' color='text.secondary'>Drag across page previews to select multiple pages. Use the grip to reorder.</Typography>
+                    {draggedPageId !== null && <GlobalStyles styles={{ '*': { cursor: 'move !important' } }} />}
                     <DndContext
                       sensors={sensors}
                       collisionDetection={closestCenter}
@@ -1307,17 +1378,23 @@ const MergePdfPage = () => {
                                   checked ? [...ids, page.PAGE_ID] : ids.filter(id => id !== page.PAGE_ID)
                                 )
                               }
+                              onPaintStart={event => {
+                                if (busy || event.button !== 0 || event.pointerType !== 'mouse') return
+                                painted.current = false
+                                paintGesture.current = { pointerId: event.pointerId, startId: page.PAGE_ID, x: event.clientX, y: event.clientY, lastX: event.clientX, lastY: event.clientY }
+                              }}
                               onSelect={() => {
+                                if (painted.current) { painted.current = false; return }
                                 setSelectedPageId(page.PAGE_ID)
                                 setPreviewOpen(true)
                               }}
                               onRotate={delta => void rotatePage(page.PAGE_ID, delta)}
-                              onRemove={() => setConfirmAction({ kind: 'page', id: page.PAGE_ID })}
+                              onRemove={() => removePages([page.PAGE_ID])}
                             />
                           ))}
                         </Box>
                       </SortableContext>
-                      <DragOverlay>
+                      <DragOverlay style={{ pointerEvents: 'none' }}>
                         {draggedPageId !== null && (
                           <Box sx={{ width: 185, p: 3, bgcolor: 'background.paper', boxShadow: 8, borderRadius: 1 }}>
                             <Box sx={{ height: 195, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -1458,7 +1535,7 @@ const MergePdfPage = () => {
                 <Button
                   variant='contained'
                   color='success'
-                  disabled={busy}
+                  disabled={busy || !/^\d{4}-(0[1-9]|1[0-2])$/.test(documentMonth) || nextCodeQuery.isFetching || nextCodeQuery.isError}
                   onClick={handleSubmit(() => setCreateConfirmOpen(true))}
                 >
                   Create Draft &amp; Continue
@@ -1495,12 +1572,12 @@ const MergePdfPage = () => {
         disableEscapeKeyDown={busy}
         TransitionComponent={Transition}
         fullWidth
-        maxWidth='lg'
+        maxWidth={false}
         sx={{
           '& .MuiDialog-paper': { overflow: 'visible' },
-          '& .MuiDialog-container': { justifyContent: 'center', alignItems: 'flex-start' }
+          '& .MuiDialog-container': { justifyContent: 'center', alignItems: 'center' }
         }}
-        PaperProps={{ sx: { top: 30, m: 0 } }}
+        PaperProps={{ sx: { width: '96vw', maxWidth: 'none', maxHeight: '96vh', m: 1 } }}
       >
         <DialogTitle>
           <Typography variant='h5' component='span'>
@@ -1520,6 +1597,13 @@ const MergePdfPage = () => {
         <DialogContent>
           {selectedPage && detail && (
             <Grid container spacing={4}>
+              <Grid size={{ xs: 12, md: 1 }}>
+                <Box sx={{ maxHeight: '76vh', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 2 }}>
+                  {detail.pages.map(page => <PreviewThumbnail key={page.PAGE_ID} jobId={detail.job.JOB_ID} page={page}
+                    localImage={pendingUploads[page.DOCUMENT_ID]?.thumbnails[page.SOURCE_PAGE_NUMBER - 1]}
+                    selected={page.PAGE_ID === selectedPage.PAGE_ID} onClick={() => setSelectedPageId(page.PAGE_ID)} />)}
+                </Box>
+              </Grid>
               <Grid size={{ xs: 12, md: 8 }}>
                 {previewQuery.isError ? (
                   <Alert
@@ -1533,23 +1617,28 @@ const MergePdfPage = () => {
                     Could not load this page preview.
                   </Alert>
                 ) : previewUrl ? (
-                  <Box
-                    component='iframe'
+                  <FitPagePreview
                     key={`${selectedPage.PAGE_ID}-${selectedPage.ROTATION_DEGREES}`}
-                    title={`Preview page ${selectedPage.SORT_ORDER}`}
-                    src={`${previewUrl}#toolbar=0&navpanes=0&view=Fit`}
-                    sx={{ width: '100%', height: 'min(72vh, 720px)', border: '1px solid', borderColor: 'divider' }}
+                    jobId={detail.job.JOB_ID}
+                    pageId={selectedPage.PAGE_ID}
+                    pageNumber={selectedPage.SORT_ORDER}
+                    rotation={selectedPage.ROTATION_DEGREES}
+                    previewUrl={previewUrl}
+                    localImage={pendingUploads[selectedPage.DOCUMENT_ID]?.thumbnails[selectedPage.SOURCE_PAGE_NUMBER - 1]}
                   />
                 ) : (
                   <Box
-                    sx={{ height: 'min(72vh, 720px)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                    sx={{ height: '76vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
                   >
                     <CircularProgress aria-label='Loading page preview' />
                   </Box>
                 )}
               </Grid>
-              <Grid size={{ xs: 12, md: 4 }}>
-                <Stack spacing={4}>
+              <Grid size={{ xs: 12, md: 3 }}>
+                <Stack spacing={3} sx={{ maxHeight: '76vh', overflowY: 'auto', pr: 1 }}>
+                  <Box sx={{ border: 1, borderColor: 'divider', borderRadius: 1.5, p: 3 }}>
+                    <Stack spacing={3}>
+                      <Typography variant='subtitle1' fontWeight={600}>Page details</Typography>
                   <Box sx={{ display: 'flex', alignItems: 'flex-end', gap: 2 }}>
                     <CustomTextField
                       fullWidth
@@ -1617,9 +1706,52 @@ const MergePdfPage = () => {
                       }}
                     />
                   )}
-                  <Box className='flex flex-wrap gap-2'>
+                    </Stack>
+                  </Box>
+                  <Box sx={{ border: 1, borderColor: 'divider', borderRadius: 1.5, p: 3 }}>
+                    <Stack spacing={3}>
+                      <Typography variant='subtitle1' fontWeight={600}>Adjust page</Typography>
+                  <Box>
+                    <Stack spacing={2}>
+                      <CustomTextField
+                        fullWidth
+                        type='number'
+                        label='Deskew (degrees)'
+                        value={deskewInput}
+                        disabled={busy}
+                        onChange={event => setDeskewInput(event.target.value)}
+                        inputProps={{ min: -15, max: 15, step: 0.1 }}
+                      />
+                      <Stack direction='row' spacing={2}>
+                      <Button
+                        variant='contained'
+                        sx={{ flex: 1 }}
+                        disabled={busy || deskewInput.trim() === '' || !Number.isFinite(Number(deskewInput)) || Math.abs(Number(deskewInput)) > 15}
+                        onClick={() => {
+                          const angle = Number(deskewInput)
+                          void changeDraft(current => ({
+                            ...current,
+                            pages: current.pages.map(page => page.PAGE_ID === selectedPage.PAGE_ID ? { ...page, DESKEW_DEGREES: angle } : page)
+                          }))
+                        }}
+                      >
+                        Apply
+                      </Button>
+                      <Button variant='outlined' sx={{ flex: 1 }} disabled={busy || (!(selectedPage.DESKEW_DEGREES ?? 0) && deskewInput === '0')} onClick={() => {
+                        setDeskewInput('0')
+                        void changeDraft(current => ({
+                          ...current,
+                          pages: current.pages.map(page => page.PAGE_ID === selectedPage.PAGE_ID ? { ...page, DESKEW_DEGREES: 0 } : page)
+                        }))
+                      }}>Reset</Button>
+                      </Stack>
+                    </Stack>
+                    <Typography variant='caption' color='text.secondary' display='block' sx={{ mt: 1.5 }}>-15 to 15 degrees &middot; positive rotates left</Typography>
+                  </Box>
+                  <Stack direction='row' spacing={2}>
                     <Button
                       variant='outlined'
+                      sx={{ flex: 1 }}
                       disabled={busy}
                       onClick={() => void rotatePage(selectedPage.PAGE_ID, 270)}
                     >
@@ -1627,11 +1759,14 @@ const MergePdfPage = () => {
                     </Button>
                     <Button
                       variant='outlined'
+                      sx={{ flex: 1 }}
                       disabled={busy}
                       onClick={() => void rotatePage(selectedPage.PAGE_ID, 90)}
                     >
                       Rotate right
                     </Button>
+                  </Stack>
+                    </Stack>
                   </Box>
                   {selectedPage.CATEGORY_ID === 1 && (
                     <Button
@@ -1650,7 +1785,7 @@ const MergePdfPage = () => {
                     variant='outlined'
                     color='error'
                     disabled={busy}
-                    onClick={() => setConfirmAction({ kind: 'page', id: selectedPage.PAGE_ID })}
+                    onClick={() => removePages([selectedPage.PAGE_ID])}
                   >
                     Remove this page
                   </Button>

@@ -7,10 +7,10 @@ import type { AxiosResponse } from 'axios'
 
 export const PREFIX_QUERY_KEY = 'MERGE_PDF'
 const key = PREFIX_QUERY_KEY
-export const useMergePdfNextCode = (enabled: boolean) =>
+export const useMergePdfNextCode = (enabled: boolean, month: string) =>
   useQuery({
-    queryKey: [key, 'next-code'],
-    queryFn: MergePdfServices.nextCode,
+    queryKey: [key, 'next-code', month],
+    queryFn: () => MergePdfServices.nextCode(month),
     enabled,
     staleTime: 0,
     gcTime: 0
@@ -40,17 +40,18 @@ export const useMergePdfPagePreview = (
   jobId: number | null,
   pageId: number | null,
   rotation: number,
+  deskew: number,
   enabled: boolean,
   preparedPdf?: Blob,
   sourcePage?: number
 ) =>
   useQuery({
-    queryKey: [key, 'page-preview', jobId, pageId, rotation],
+    queryKey: [key, 'page-preview', jobId, pageId, rotation, deskew],
     queryFn: async ({ signal }) =>
       (
         await (preparedPdf
-          ? MergePdfServices.preparedPagePreview(preparedPdf, sourcePage ?? 1, rotation, signal)
-          : MergePdfServices.pagePreview(jobId ?? 0, pageId ?? 0, signal, rotation))
+          ? MergePdfServices.preparedPagePreview(preparedPdf, sourcePage ?? 1, rotation, deskew, signal)
+          : MergePdfServices.pagePreview(jobId ?? 0, pageId ?? 0, signal, rotation, deskew))
       ).data,
     enabled: enabled && jobId !== null && pageId !== null,
     staleTime: 300_000,

@@ -10,10 +10,11 @@ interface Props {
   rotation: number
   enabled?: boolean
   label: string
+  deskew?: number
   localImage?: string
 }
 
-const MergePdfPageThumbnail = ({ jobId, pageId, rotation, enabled = true, label, localImage }: Props) => {
+const MergePdfPageThumbnail = ({ jobId, pageId, rotation, enabled = true, label, localImage, deskew = 0 }: Props) => {
   const query = useMergePdfPageThumbnail(jobId, pageId, rotation, enabled && pageId > 0)
   const fetchedUrl = useObjectUrl(enabled ? query.data : undefined)
   const url = localImage ? `data:image/png;base64,${localImage}` : fetchedUrl
@@ -30,7 +31,7 @@ const MergePdfPageThumbnail = ({ jobId, pageId, rotation, enabled = true, label,
           height: '100%',
           objectFit: 'contain',
           pointerEvents: 'none',
-          transform: localImage ? `rotate(${rotation}deg)` : undefined
+          transform: `rotate(${(localImage ? rotation : 0) - deskew}deg)`
         }}
       />
     )

@@ -6,6 +6,7 @@ import UserProfileSettingProgramServices from '@/services/common-system/UserProf
 import type { UserProfileSettingProgramI } from '@/types/common-system/UserProfileSettingProgram'
 import { getUserData } from '@/utils/user-profile/userLoginProfile'
 import { documentStatusColumnIds } from './documentStatus'
+import { resolveColumnOrder } from './columnOrder'
 
 export const mergePdfFormSchema = z.object({
   title: z.string().trim().max(255)
@@ -18,18 +19,20 @@ export const mergePdfStatusOptions = [
   { value: 'COMPLETED' as const, label: 'Completed' }
 ]
 
-const columns = [
+export const mergePdfDefaultColumnOrder = [
   'mrt-row-actions',
   'STATUS',
   'OUTPUT_FILE_NAME',
   'JOB_TITLE',
+  ...documentStatusColumnIds,
   'REVISION_NO',
   'DOCUMENT_COUNT',
   'PAGE_COUNT',
-  ...documentStatusColumnIds,
   'UPDATE_DATE',
   'UPDATE_BY'
 ] as const
+
+const columns = mergePdfDefaultColumnOrder
 
 export const mergePdfListSchema = z.object({
   searchFilters: z.object({
@@ -44,6 +47,8 @@ export const mergePdfListSchema = z.object({
     columnVisibility: z.record(z.string(), z.boolean()),
     columnPinning: z.object({ left: z.array(z.string()).optional(), right: z.array(z.string()).optional() }),
     columnOrder: z.array(z.string()),
+    columnOrderVersion: z.number().optional(),
+    needsColumnOrderMigration: z.boolean().optional(),
     columnFilterFns: z.any()
   })
 })
@@ -60,6 +65,8 @@ const defaultListValues = (): MergePdfListValues => ({
     columnVisibility: Object.fromEntries(columns.map(column => [column, true])),
     columnPinning: { left: ['mrt-row-actions'], right: [] },
     columnOrder: Array.from(columns),
+    columnOrderVersion: 1,
+    needsColumnOrderMigration: false,
     columnFilterFns: {
       STATUS: MRT_FilterFns.equals.name,
       JOB_TITLE: MRT_FilterFns.contains.name,
@@ -89,26 +96,8 @@ export const fetchMergePdfListValues = async (menuId: number): Promise<MergePdfL
     if (!saved) return defaults
 
     const currentColumns = new Set<string>(columns)
-    const savedOrder = saved.searchResults?.columnOrder ?? []
-    const columnOrder = [
-      ...savedOrder.filter(
-        column =>
-          currentColumns.has(column) &&
-          column !== 'OUTPUT_FILE_NAME' &&
-          column !== 'REVISION_NO' &&
-          !documentStatusColumnIds.includes(column)
-      ),
-      ...columns.filter(
-        column =>
-          !savedOrder.includes(column) &&
-          column !== 'OUTPUT_FILE_NAME' &&
-          column !== 'REVISION_NO' &&
-          !documentStatusColumnIds.includes(column)
-      )
-    ]
-    columnOrder.splice(columnOrder.indexOf('STATUS') + 1, 0, 'OUTPUT_FILE_NAME')
-    columnOrder.splice(columnOrder.indexOf('JOB_TITLE') + 1, 0, 'REVISION_NO')
-    columnOrder.splice(columnOrder.indexOf('PAGE_COUNT') + 1, 0, ...documentStatusColumnIds)
+    const needsColumnOrderMigration = (saved.searchResults?.columnOrderVersion ?? 0) < 1
+    const columnOrder = resolveColumnOrder(saved.searchResults?.columnOrder ?? [], columns, documentStatusColumnIds, needsColumnOrderMigration)
     return {
       searchFilters: { ...defaults.searchFilters, ...saved.searchFilters },
       searchResults: {
@@ -118,6 +107,8 @@ export const fetchMergePdfListValues = async (menuId: number): Promise<MergePdfL
           currentColumns.has(filter.id)
         ),
         columnOrder,
+        columnOrderVersion: 1,
+        needsColumnOrderMigration,
         columnVisibility: Object.fromEntries(
           columns.map(column => [column, saved.searchResults?.columnVisibility?.[column] ?? true])
         ),

@@ -35,7 +35,14 @@ const InnerList = ({ onOpen, onAdd, refreshVersion }: Props) => {
 
   return (
     <FormProvider {...methods}>
-      {!isLoading && MENU_ID > 0 && <DxWatchSearchFilters MENU_ID={MENU_ID} searchFiltersData={searchFilters} />}
+      {!isLoading && MENU_ID > 0 && (
+        <DxWatchSearchFilters
+          MENU_ID={MENU_ID}
+          searchFiltersData={searchFilters}
+          searchResultsMetadata={{ columnOrderVersion: 1 }}
+          saveOnMount={methods.getValues('searchResults.needsColumnOrderMigration') === true}
+        />
+      )}
       <Grid container spacing={6}>
         <Grid size={12}>
           <MergePdfSearchFilters />

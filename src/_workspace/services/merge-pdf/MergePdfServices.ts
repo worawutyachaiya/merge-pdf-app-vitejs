@@ -63,11 +63,12 @@ export default class MergePdfServices {
     })
   }
 
-  static preparedPagePreview(file: Blob, page: number, rotation: number, signal?: AbortSignal) {
+  static preparedPagePreview(file: Blob, page: number, rotation: number, deskew: number, signal?: AbortSignal) {
     const data = new FormData()
     data.append('file', file, 'preview.pdf')
     data.append('page', String(page))
     data.append('rotation', String(rotation))
+    data.append('deskew', String(deskew))
     return auditRequest<Blob>({
       url: `${root}/editor/page-preview`,
       method: 'POST',
@@ -90,8 +91,8 @@ export default class MergePdfServices {
     })
   }
 
-  static nextCode() {
-    return axiosRequest<ResultDataResponseI<{ code: string }>>({ url: `${root}/jobs/next-code`, method: 'GET' })
+  static nextCode(month?: string) {
+    return axiosRequest<ResultDataResponseI<{ code: string }>>({ url: `${root}/jobs/next-code`, params: { month }, method: 'GET' })
   }
 
   static batchPages(jobId: number, rowVersion: number, pageIds: number[], action: BatchPageAction) {
@@ -226,13 +227,13 @@ export default class MergePdfServices {
     })
   }
 
-  static pagePreview(jobId: number, pageId: number, signal?: AbortSignal, rotation?: number) {
+  static pagePreview(jobId: number, pageId: number, signal?: AbortSignal, rotation?: number, deskew?: number) {
     return axiosRequest<Blob>({
       url: `${root}/jobs/${jobId}/pages/${pageId}/preview`,
       method: 'POST',
       responseType: 'blob',
       signal,
-      data: { rotation }
+      data: { rotation, deskew }
     })
   }
 

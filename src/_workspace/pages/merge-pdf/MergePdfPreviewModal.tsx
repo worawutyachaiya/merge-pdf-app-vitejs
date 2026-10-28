@@ -35,7 +35,7 @@ const MergePdfPreviewModal = ({ open, job, onClose }: Props) => {
     publication?.PUBLICATION_ID ?? null
   )
   const previewUrl = useObjectUrl(open ? previewQuery.data : undefined)
-  const filePath = publication?.NETWORK_PATH ?? job?.NETWORK_PATH
+  const filePath = publication?.SHARE_PATH
 
   const copyPath = async () => {
     if (!filePath) return

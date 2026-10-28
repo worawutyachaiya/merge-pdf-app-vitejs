@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+﻿import { useEffect, useMemo, useState } from 'react'
 
 import AddIcon from '@mui/icons-material/Add'
 import { Button, Card, CardHeader, Chip } from '@mui/material'
@@ -28,7 +28,7 @@ import { MENU_ID } from './env'
 import MergePdfDeleteModal from './MergePdfDeleteModal'
 import MergePdfViewModal from './MergePdfViewModal'
 import MergePdfPreviewModal from './MergePdfPreviewModal'
-import type { MergePdfListValues } from './validationSchema'
+import { mergePdfDefaultColumnOrder, type MergePdfListValues } from './validationSchema'
 import { documentStatusColumns } from './documentStatus'
 import DocumentStatusIndicator from './DocumentStatusIndicator'
 
@@ -157,17 +157,6 @@ const MergePdfSearchResult = ({ onOpen, onAdd, refreshVersion }: Props) => {
         Cell: ({ row }) =>
           /^I\d{2}-\d{4,}$/.test(row.original.JOB_CODE) ? row.original.JOB_CODE : row.original.JOB_TITLE
       },
-      {
-        accessorKey: 'REVISION_NO',
-        header: 'REVISION',
-        size: 150,
-        minSize: 150,
-        enableSorting: false,
-        enableColumnFilter: false,
-        Cell: ({ row }) => (row.original.REVISION_NO > 0 ? row.original.REVISION_NO : '-')
-      },
-      { accessorKey: 'DOCUMENT_COUNT', header: 'FILES', size: 155, minSize: 150, enableColumnFilter: false },
-      { accessorKey: 'PAGE_COUNT', header: 'PAGES', size: 155, minSize: 150, enableColumnFilter: false },
       ...documentStatusColumns.map<MRT_ColumnDef<MergePdfJob>>(category => ({
         id: category.id,
         header: category.label,
@@ -193,6 +182,17 @@ const MergePdfSearchResult = ({ onOpen, onAdd, refreshVersion }: Props) => {
           />
         )
       })),
+      {
+        accessorKey: 'REVISION_NO',
+        header: 'REVISION',
+        size: 150,
+        minSize: 150,
+        enableSorting: false,
+        enableColumnFilter: false,
+        Cell: ({ row }) => (row.original.REVISION_NO > 0 ? row.original.REVISION_NO : '-')
+      },
+      { accessorKey: 'DOCUMENT_COUNT', header: 'FILES', size: 155, minSize: 150, enableColumnFilter: false },
+      { accessorKey: 'PAGE_COUNT', header: 'PAGES', size: 155, minSize: 150, enableColumnFilter: false },
       {
         accessorKey: 'UPDATE_DATE',
         header: 'UPDATE DATE',
@@ -256,7 +256,7 @@ const MergePdfSearchResult = ({ onOpen, onAdd, refreshVersion }: Props) => {
               muiTableBodyCellProps: { align: 'center' }
             }
           }}
-          initialState={{ showColumnFilters: columnFilters.length > 0 }}
+          initialState={{ showColumnFilters: columnFilters.length > 0, columnOrder: [...mergePdfDefaultColumnOrder] }}
           state={{
             columnFilters,
             pagination,
