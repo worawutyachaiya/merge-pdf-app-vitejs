@@ -37,6 +37,7 @@ const columns = mergePdfDefaultColumnOrder
 export const mergePdfListSchema = z.object({
   searchFilters: z.object({
     documentName: z.string(),
+    includingCancelled: z.boolean(),
     status: z.object({ value: z.enum(['DRAFT', 'COMPLETED']), label: z.string() }).nullable()
   }),
   searchResults: z.object({
@@ -56,7 +57,7 @@ export const mergePdfListSchema = z.object({
 export type MergePdfListValues = z.infer<typeof mergePdfListSchema>
 
 const defaultListValues = (): MergePdfListValues => ({
-  searchFilters: { documentName: '', status: null },
+  searchFilters: { documentName: '', status: null, includingCancelled: false },
   searchResults: {
     pageSize: 10,
     columnFilters: [],

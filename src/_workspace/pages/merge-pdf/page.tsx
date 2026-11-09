@@ -62,6 +62,7 @@ import Transition from '@/components/TransitionDialog'
 import SortablePage from './SortablePage'
 import PreviewThumbnail from './PreviewThumbnail'
 import FitPagePreview from './FitPagePreview'
+import { jobStampCoordinates } from './stampPlacement'
 import MergePdfList from './MergePdfList'
 import MergePdfPageThumbnail from './MergePdfPageThumbnail'
 import { breadcrumbNavigation, MENU_NAME } from './env'
@@ -118,7 +119,6 @@ const MergePdfPage = () => {
   const [selectedJobId, setSelectedJobId] = useState<number | null>(null)
   const [editorMode, setEditorMode] = useState<'Add' | 'Edit' | null>(null)
   const [refreshVersion, setRefreshVersion] = useState(0)
-  const [createConfirmOpen, setCreateConfirmOpen] = useState(false)
   const [selectedPageId, setSelectedPageId] = useState<number | null>(null)
   const [importMode, setImportMode] = useState<'manual' | 'combined'>('manual')
   const [files, setFiles] = useState<ImportFile[]>([])
@@ -222,6 +222,7 @@ const MergePdfPage = () => {
       jobId: current.job.JOB_ID,
       rowVersion: current.job.ROW_VERSION,
       changes: {
+        ...(current.job.LAST_COMPLETED_AT || current.job.STATUS === 'COMPLETED' ? {} : { stampCoordinates: jobStampCoordinates(current.job) }),
         pages: current.pages.map(page => ({ ...page, DESCRIPTION: page.CATEGORY_ID === 10 ? page.DESCRIPTION : null })),
         documents: current.documents.map(doc => ({
           ...doc,
@@ -415,7 +416,6 @@ const MergePdfPage = () => {
       const created = firstDetail(await actions.create.mutateAsync({ title: values.title, reference: null, month: documentMonth }))
       reset(values)
       setSelectedJobId(created.job.JOB_ID)
-      setCreateConfirmOpen(false)
     }, 'Draft created')
 
   const saveDraft = handleSubmit(values =>
@@ -539,6 +539,7 @@ const MergePdfPage = () => {
           categoryId: nextCategoryId
         })
       )
+      setCheckedPageIds([])
     })
 
   const rotatePage = (pageId: number, delta: 90 | 270) =>
@@ -552,6 +553,7 @@ const MergePdfPage = () => {
           delta
         })
       )
+      setCheckedPageIds([])
     })
 
   const updateCheckedPages = (action: Parameters<typeof MergePdfServices.batchPages>[3]) =>
@@ -565,6 +567,7 @@ const MergePdfPage = () => {
           action
         })
       )
+      setCheckedPageIds([])
     })
 
   const sortByCategory = () => {
@@ -579,6 +582,7 @@ const MergePdfPage = () => {
           pageIds
         })
       )
+      setCheckedPageIds([])
     })
   }
 
@@ -646,6 +650,7 @@ const MergePdfPage = () => {
           pageIds: ids
         })
       )
+      setCheckedPageIds([])
     })
   }
 
@@ -653,7 +658,7 @@ const MergePdfPage = () => {
     if (!detail || !ids.length) return
     void run(async () => {
       firstDetail(await actions.batchPages.mutateAsync({ jobId: detail.job.JOB_ID, rowVersion: detail.job.ROW_VERSION, pageIds: ids, action: { kind: 'remove' } }))
-      setCheckedPageIds(current => current.filter(id => !ids.includes(id)))
+      setCheckedPageIds([])
       if (selectedPageId !== null && ids.includes(selectedPageId)) { setPreviewOpen(false); setSelectedPageId(null) }
     })
   }
@@ -746,6 +751,7 @@ const MergePdfPage = () => {
           })
         )
         setStatusEditId(null)
+        setCheckedPageIds([])
       },
       detail?.documents.find(document => document.DOCUMENT_ID === statusEditId)?.ENTRY_STATUS_CODE === '04'
         ? 'Status 04 cleared in current edits. Save to apply.'
@@ -1536,7 +1542,7 @@ const MergePdfPage = () => {
                   variant='contained'
                   color='success'
                   disabled={busy || !/^\d{4}-(0[1-9]|1[0-2])$/.test(documentMonth) || nextCodeQuery.isFetching || nextCodeQuery.isError}
-                  onClick={handleSubmit(() => setCreateConfirmOpen(true))}
+                  onClick={handleSubmit(() => void createDraft())}
                 >
                   Create Draft &amp; Continue
                 </Button>
@@ -1554,16 +1560,6 @@ const MergePdfPage = () => {
           </Box>
         </Grid>
       )}
-      <ConfirmModal
-        show={createConfirmOpen}
-        onConfirmClick={() => void createDraft()}
-        onCloseClick={() => setCreateConfirmOpen(false)}
-        isDelete={false}
-        isLoading={busy}
-        title='Create document'
-        // description='Create a new document with an automatically assigned number?'
-        confirmLabel='Create draft'
-      />
       <Dialog
         open={previewOpen && !!selectedPage}
         onClose={(_, reason) => {
@@ -1619,12 +1615,27 @@ const MergePdfPage = () => {
                 ) : previewUrl ? (
                   <FitPagePreview
                     key={`${selectedPage.PAGE_ID}-${selectedPage.ROTATION_DEGREES}`}
-                    jobId={detail.job.JOB_ID}
-                    pageId={selectedPage.PAGE_ID}
                     pageNumber={selectedPage.SORT_ORDER}
-                    rotation={selectedPage.ROTATION_DEGREES}
                     previewUrl={previewUrl}
-                    localImage={pendingUploads[selectedPage.DOCUMENT_ID]?.thumbnails[selectedPage.SOURCE_PAGE_NUMBER - 1]}
+                    annotations={selectedPage.EDITOR_ANNOTATIONS ?? []}
+                    onAnnotationBusyChange={setBusy}
+                    onAnnotationsChange={busy ? undefined : annotations => {
+                      void changeDraft(current => ({ ...current, pages: current.pages.map(page =>
+                        page.PAGE_ID === selectedPage.PAGE_ID ? { ...page, EDITOR_ANNOTATIONS: annotations } : page
+                      ) }))
+                    }}
+                    visualDeskew={deskewInput.trim() !== '' && Number.isFinite(Number(deskewInput)) && Math.abs(Number(deskewInput)) <= 15
+                      ? Number(deskewInput) - (selectedPage.DESKEW_DEGREES ?? 0) : 0}
+                    stamp={selectedPageIndex === 0 ? { name: detail.job.JOB_CODE, coordinates: jobStampCoordinates(detail.job), fontSize: detail.job.STAMP_FONT_SIZE ?? 10 } : undefined}
+                    onStampSizeChange={busy || detail.job.LAST_COMPLETED_AT || detail.job.STATUS === 'COMPLETED' ? undefined : (fontSize, coordinates) => {
+                      void changeDraft(current => ({ ...current, job: {
+                        ...current.job, STAMP_FONT_SIZE: fontSize,
+                        ...(coordinates ? { STAMP_X: coordinates.x, STAMP_Y: coordinates.y } : {})
+                      } }))
+                    }}
+                    onStampMove={busy || detail.job.LAST_COMPLETED_AT || detail.job.STATUS === 'COMPLETED' ? undefined : coordinates => {
+                      void changeDraft(current => ({ ...current, job: { ...current.job, STAMP_X: coordinates.x, STAMP_Y: coordinates.y } }))
+                    }}
                   />
                 ) : (
                   <Box
@@ -1729,6 +1740,7 @@ const MergePdfPage = () => {
                         disabled={busy || deskewInput.trim() === '' || !Number.isFinite(Number(deskewInput)) || Math.abs(Number(deskewInput)) > 15}
                         onClick={() => {
                           const angle = Number(deskewInput)
+                          setCheckedPageIds([])
                           void changeDraft(current => ({
                             ...current,
                             pages: current.pages.map(page => page.PAGE_ID === selectedPage.PAGE_ID ? { ...page, DESKEW_DEGREES: angle } : page)
@@ -1739,6 +1751,7 @@ const MergePdfPage = () => {
                       </Button>
                       <Button variant='outlined' sx={{ flex: 1 }} disabled={busy || (!(selectedPage.DESKEW_DEGREES ?? 0) && deskewInput === '0')} onClick={() => {
                         setDeskewInput('0')
+                        setCheckedPageIds([])
                         void changeDraft(current => ({
                           ...current,
                           pages: current.pages.map(page => page.PAGE_ID === selectedPage.PAGE_ID ? { ...page, DESKEW_DEGREES: 0 } : page)
@@ -1768,9 +1781,11 @@ const MergePdfPage = () => {
                   </Stack>
                     </Stack>
                   </Box>
+                  <Stack direction='row' spacing={2}>
                   {selectedPage.CATEGORY_ID === 1 && (
                     <Button
-                      variant='tonal'
+                      variant='contained'
+                      sx={{ flex: 1, minHeight: 40, minWidth: 0, whiteSpace: 'normal' }}
                       disabled={busy}
                       onClick={() => {
                         setStatusEditId(selectedPage.DOCUMENT_ID)
@@ -1783,21 +1798,19 @@ const MergePdfPage = () => {
                   )}
                   <Button
                     variant='outlined'
+                    sx={{ flex: 1, minHeight: 40, minWidth: 0, whiteSpace: 'normal' }}
                     color='error'
                     disabled={busy}
                     onClick={() => removePages([selectedPage.PAGE_ID])}
                   >
                     Remove this page
                   </Button>
-                </Stack>
-              </Grid>
-            </Grid>
-          )}
-        </DialogContent>
-        <DialogActions>
+                  </Stack>
+                  <Stack direction='row' spacing={2}>
           <Button
-            variant='tonal'
-            color='secondary'
+            variant='contained'
+            color='primary'
+            fullWidth
             disabled={busy || selectedPageIndex <= 0}
             onClick={() => {
               setSelectedPageId(detail?.pages[selectedPageIndex - 1]?.PAGE_ID ?? null)
@@ -1806,8 +1819,9 @@ const MergePdfPage = () => {
             Previous
           </Button>
           <Button
-            variant='tonal'
-            color='secondary'
+            variant='contained'
+            color='primary'
+            fullWidth
             disabled={busy || !detail || selectedPageIndex >= detail.pages.length - 1}
             onClick={() => {
               setSelectedPageId(detail?.pages[selectedPageIndex + 1]?.PAGE_ID ?? null)
@@ -1815,6 +1829,13 @@ const MergePdfPage = () => {
           >
             Next
           </Button>
+                  </Stack>
+                </Stack>
+              </Grid>
+            </Grid>
+          )}
+        </DialogContent>
+        <DialogActions>
           <Button variant='tonal' color='secondary' disabled={busy} onClick={() => setPreviewOpen(false)}>
             Close
           </Button>

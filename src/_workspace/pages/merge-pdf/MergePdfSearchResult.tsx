@@ -1,7 +1,7 @@
 ﻿import { useEffect, useMemo, useState } from 'react'
 
 import AddIcon from '@mui/icons-material/Add'
-import { Button, Card, CardHeader, Chip } from '@mui/material'
+import { Button, Card, CardHeader, Chip, IconButton, Tooltip, Stack } from '@mui/material'
 import dayjs from 'dayjs'
 import type {
   MRT_ColumnDef,
@@ -22,7 +22,8 @@ import { useDxContext } from '@/_template/DxContextProvider'
 import { DxMRTTable } from '@/_template/DxMRTTable'
 import { useMergePdfJobs } from '@/_workspace/react-query/hooks/useMergePdf'
 import type { MergePdfJob } from '@/_workspace/types/merge-pdf/MergePdf'
-import ActionsMenu from '@/libs/material-react-table/components/ActionsMenu'
+import CategoryPdfPreviewModal from './CategoryPdfPreviewModal'
+import MergePdfRestoreModal from './MergePdfRestoreModal'
 
 import { MENU_ID } from './env'
 import MergePdfDeleteModal from './MergePdfDeleteModal'
@@ -44,6 +45,10 @@ const MergePdfSearchResult = ({ onOpen, onAdd, refreshVersion }: Props) => {
   const checkPermission = useCheckPermission()
   const [openView, setOpenView] = useState(false)
   const [openDelete, setOpenDelete] = useState(false)
+  const [restoreJob, setRestoreJob] = useState<MergePdfJob | null>(null)
+  const [categoryPreview, setCategoryPreview] = useState<{ job: MergePdfJob; categoryId: number; name: string } | null>(
+    null
+  )
   const [previewJob, setPreviewJob] = useState<MergePdfJob | null>(null)
   const [rowSelected, setRowSelected] = useState<MRT_Row<MergePdfJob> | null>(null)
   const [columnVisibility, setColumnVisibility] = useState<MRT_VisibilityState>(
@@ -75,6 +80,7 @@ const MergePdfSearchResult = ({ onOpen, onAdd, refreshVersion }: Props) => {
   const jobs = useMergePdfJobs(
     {
       search: filters.documentName,
+      includingCancelled: filters.includingCancelled,
       status: filters.status?.value ?? 'ALL',
       page: pagination.pageIndex + 1,
       pageSize: pagination.pageSize,
@@ -113,13 +119,15 @@ const MergePdfSearchResult = ({ onOpen, onAdd, refreshVersion }: Props) => {
           <Chip
             size='small'
             variant='tonal'
-            color={row.original.STATUS === 'COMPLETED' ? 'success' : 'warning'}
+            color={row.original.INUSE === 0 ? 'error' : row.original.STATUS === 'COMPLETED' ? 'success' : 'warning'}
             label={
-              row.original.STATUS === 'COMPLETED'
-                ? 'Completed'
-                : row.original.STATUS === 'DRAFT'
-                  ? 'Draft'
-                  : 'Completing'
+              row.original.INUSE === 0
+                ? 'Cancelled'
+                : row.original.STATUS === 'COMPLETED'
+                  ? 'Completed'
+                  : row.original.STATUS === 'DRAFT'
+                    ? 'Draft'
+                    : 'Completing'
             }
           />
         )
@@ -138,6 +146,7 @@ const MergePdfSearchResult = ({ onOpen, onAdd, refreshVersion }: Props) => {
                 setPreviewJob(row.original)
               }}
               size='small'
+              disabled={row.original.INUSE === 0}
               startIcon={<i className='tabler-folder-open' />}
             >
               {row.original.OUTPUT_FILE_NAME}
@@ -170,17 +179,26 @@ const MergePdfSearchResult = ({ onOpen, onAdd, refreshVersion }: Props) => {
         enableColumnOrdering: false,
         muiTableHeadCellProps: { align: 'center' },
         muiTableBodyCellProps: { align: 'center' },
-        Cell: ({ row }) => (
-          <DocumentStatusIndicator
-            categoryId={category.categoryId}
-            name={category.name}
-            pageCount={
-              row.original.DOCUMENT_PAGE_COUNTS
-                ? (row.original.DOCUMENT_PAGE_COUNTS[category.categoryId] ?? 0)
-                : undefined
-            }
-          />
-        )
+        Cell: ({ row }) => {
+          const counts = row.original.DOCUMENT_PAGE_COUNTS
+          const count = counts ? (counts[category.categoryId] ?? 0) : undefined
+          const indicator = (
+            <DocumentStatusIndicator categoryId={category.categoryId} name={category.name} pageCount={count} />
+          )
+          return (count ?? 0) > 0 && row.original.INUSE === 1 ? (
+            <IconButton
+              size='small'
+              aria-label={`View ${category.name} for ${row.original.JOB_TITLE}`}
+              onClick={() =>
+                setCategoryPreview({ job: row.original, categoryId: category.categoryId, name: category.name })
+              }
+            >
+              {indicator}
+            </IconButton>
+          ) : (
+            indicator
+          )
+        }
       })),
       {
         accessorKey: 'REVISION_NO',
@@ -250,7 +268,7 @@ const MergePdfSearchResult = ({ onOpen, onAdd, refreshVersion }: Props) => {
           displayColumnDefOptions={{
             'mrt-row-actions': {
               header: 'Actions',
-              size: 100,
+              size: 135,
               grow: false,
               muiTableHeadCellProps: { align: 'center' },
               muiTableBodyCellProps: { align: 'center' }
@@ -271,26 +289,68 @@ const MergePdfSearchResult = ({ onOpen, onAdd, refreshVersion }: Props) => {
             columnFilterFns
           }}
           renderRowActions={({ row }) => (
-            <div className='flex items-center justify-center'>
-              <ActionsMenu
-                row={row}
-                rowSelected={rowSelected}
-                setRowSelected={setRowSelected}
-                setOpenModalEdit={value => {
-                  const shouldOpen = typeof value === 'function' ? value(false) : value
-                  if (shouldOpen) onOpen(row.original.JOB_ID)
-                }}
-                setOpenModalDelete={setOpenDelete}
-                MENU_ID={MENU_ID}
-                isNeedViewEyeIcon
-                isNeedEdit={row.original.STATUS !== 'COMPLETING'}
-                isNeedDelete={row.original.STATUS !== 'COMPLETING'}
-                handleClickOpenModalView={selected => {
-                  setRowSelected(selected)
-                  setOpenView(true)
-                }}
-              />
-            </div>
+            <Stack direction='row' justifyContent='center' spacing={0.5}>
+              {row.original.INUSE === 0 ? (
+                <Tooltip title='Restore'>
+                  <IconButton
+                    color='success'
+                    aria-label='Restore document'
+                    onClick={() => {
+                      if (checkPermission(Number(import.meta.env.VITE_APPLICATION_ID), MENU_ID, 'IS_UPDATE'))
+                        setRestoreJob(row.original)
+                    }}
+                  >
+                    <i className='tabler-restore' />
+                  </IconButton>
+                </Tooltip>
+              ) : (
+                <>
+                  <Tooltip title='View'>
+                    <IconButton
+                      aria-label='View document'
+                      onClick={() => {
+                        setRowSelected(row)
+                        setOpenView(true)
+                      }}
+                    >
+                      <i className='tabler-eye' />
+                    </IconButton>
+                  </Tooltip>
+                  <Tooltip title='Edit'>
+                    <span>
+                      <IconButton
+                        color='primary'
+                        aria-label='Edit document'
+                        disabled={row.original.STATUS === 'COMPLETING'}
+                        onClick={() => {
+                          if (checkPermission(Number(import.meta.env.VITE_APPLICATION_ID), MENU_ID, 'IS_UPDATE'))
+                            onOpen(row.original.JOB_ID)
+                        }}
+                      >
+                        <i className='tabler-edit' />
+                      </IconButton>
+                    </span>
+                  </Tooltip>
+                  <Tooltip title='Delete'>
+                    <span>
+                      <IconButton
+                        color='error'
+                        aria-label='Delete document'
+                        disabled={row.original.STATUS === 'COMPLETING'}
+                        onClick={() => {
+                          if (checkPermission(Number(import.meta.env.VITE_APPLICATION_ID), MENU_ID, 'IS_DELETE')) {
+                            setRowSelected(row)
+                            setOpenDelete(true)
+                          }
+                        }}
+                      >
+                        <i className='tabler-trash' />
+                      </IconButton>
+                    </span>
+                  </Tooltip>
+                </>
+              )}
+            </Stack>
           )}
           isError={jobs.isError}
         />
@@ -316,6 +376,21 @@ const MergePdfSearchResult = ({ onOpen, onAdd, refreshVersion }: Props) => {
             setOpenView(false)
             setRowSelected(null)
           }}
+        />
+      )}
+      {categoryPreview && (
+        <CategoryPdfPreviewModal
+          job={categoryPreview.job}
+          categoryId={categoryPreview.categoryId}
+          categoryName={categoryPreview.name}
+          onClose={() => setCategoryPreview(null)}
+        />
+      )}
+      {restoreJob && (
+        <MergePdfRestoreModal
+          job={restoreJob}
+          onClose={() => setRestoreJob(null)}
+          onRestored={() => setIsEnableFetching(true)}
         />
       )}
       {previewJob && <MergePdfPreviewModal open job={previewJob} onClose={() => setPreviewJob(null)} />}

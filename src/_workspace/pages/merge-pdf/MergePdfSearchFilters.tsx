@@ -1,6 +1,16 @@
 import { useState } from 'react'
 
-import { Button, Card, CardContent, CardHeader, Collapse, Grid, IconButton } from '@mui/material'
+import {
+  Button,
+  Card,
+  CardContent,
+  CardHeader,
+  Collapse,
+  Grid,
+  IconButton,
+  Checkbox,
+  FormControlLabel
+} from '@mui/material'
 import classNames from 'classnames'
 import { Controller, useFormContext } from 'react-hook-form'
 
@@ -39,7 +49,7 @@ const MergePdfSearchFilters = () => {
   }
 
   const clear = () => {
-    setValue('searchFilters', { documentName: '', status: null }, { shouldValidate: true })
+    setValue('searchFilters', { documentName: '', status: null, includingCancelled: false }, { shouldValidate: true })
     search()
   }
 
@@ -84,6 +94,18 @@ const MergePdfSearchFilters = () => {
                     options={mergePdfStatusOptions}
                     placeholder='Select ...'
                     classNamePrefix='select'
+                  />
+                )}
+              />
+            </Grid>
+            <Grid size={{ xs: 12, sm: 4 }} sx={{ display: 'flex', alignItems: 'flex-end' }}>
+              <Controller
+                name='searchFilters.includingCancelled'
+                control={control}
+                render={({ field: { value, ...field } }) => (
+                  <FormControlLabel
+                    control={<Checkbox {...field} checked={!!value} color='warning' />}
+                    label='Including Cancelled'
                   />
                 )}
               />

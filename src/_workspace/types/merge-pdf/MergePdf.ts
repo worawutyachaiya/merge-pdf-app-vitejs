@@ -3,6 +3,9 @@ export interface MergePdfJob {
   INUSE: number
   JOB_CODE: string
   JOB_TITLE: string
+  STAMP_X?: number | null
+  STAMP_Y?: number | null
+  STAMP_FONT_SIZE?: number | null
   JOB_REFERENCE: string | null
   STATUS: 'DRAFT' | 'COMPLETING' | 'COMPLETED'
   ROW_VERSION: number
@@ -35,6 +38,7 @@ export interface MergePdfDocument {
 }
 
 export interface MergePdfPage {
+  EDITOR_ANNOTATIONS?: import('@/_workspace/pages/merge-pdf/pageAnnotations').PageAnnotation[] | null
   PAGE_ID: number
   DOCUMENT_ID: number
   SOURCE_PAGE_NUMBER: number

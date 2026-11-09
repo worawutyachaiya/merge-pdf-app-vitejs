@@ -112,6 +112,10 @@ export const useMergePdfActions = () => {
         void queryClient.invalidateQueries({ queryKey: [key, 'detail', input.jobId] })
       }
     }),
+    restoreJob: useMutation({
+      mutationFn: (input: { jobId: number; rowVersion: number }) => MergePdfServices.restoreJob(input.jobId, input.rowVersion),
+      onSuccess: accept
+    }),
     deleteJob: useMutation({
       mutationFn: async (input: { jobId: number; rowVersion: number }) => {
         const response = await MergePdfServices.deleteJob(input.jobId, input.rowVersion)
