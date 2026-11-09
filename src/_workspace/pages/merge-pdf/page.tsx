@@ -222,7 +222,7 @@ const MergePdfPage = () => {
       jobId: current.job.JOB_ID,
       rowVersion: current.job.ROW_VERSION,
       changes: {
-        ...(current.job.LAST_COMPLETED_AT || current.job.STATUS === 'COMPLETED' ? {} : { stampCoordinates: jobStampCoordinates(current.job) }),
+        stampCoordinates: jobStampCoordinates(current.job),
         pages: current.pages.map(page => ({ ...page, DESCRIPTION: page.CATEGORY_ID === 10 ? page.DESCRIPTION : null })),
         documents: current.documents.map(doc => ({
           ...doc,
@@ -1627,13 +1627,13 @@ const MergePdfPage = () => {
                     visualDeskew={deskewInput.trim() !== '' && Number.isFinite(Number(deskewInput)) && Math.abs(Number(deskewInput)) <= 15
                       ? Number(deskewInput) - (selectedPage.DESKEW_DEGREES ?? 0) : 0}
                     stamp={selectedPageIndex === 0 ? { name: detail.job.JOB_CODE, coordinates: jobStampCoordinates(detail.job), fontSize: detail.job.STAMP_FONT_SIZE ?? 10 } : undefined}
-                    onStampSizeChange={busy || detail.job.LAST_COMPLETED_AT || detail.job.STATUS === 'COMPLETED' ? undefined : (fontSize, coordinates) => {
+                    onStampSizeChange={busy ? undefined : (fontSize, coordinates) => {
                       void changeDraft(current => ({ ...current, job: {
                         ...current.job, STAMP_FONT_SIZE: fontSize,
                         ...(coordinates ? { STAMP_X: coordinates.x, STAMP_Y: coordinates.y } : {})
                       } }))
                     }}
-                    onStampMove={busy || detail.job.LAST_COMPLETED_AT || detail.job.STATUS === 'COMPLETED' ? undefined : coordinates => {
+                    onStampMove={busy ? undefined : coordinates => {
                       void changeDraft(current => ({ ...current, job: { ...current.job, STAMP_X: coordinates.x, STAMP_Y: coordinates.y } }))
                     }}
                   />
