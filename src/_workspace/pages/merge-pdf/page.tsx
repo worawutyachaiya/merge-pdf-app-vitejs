@@ -1797,7 +1797,7 @@ const MergePdfPage = () => {
                     </Button>
                   )}
                   <Button
-                    variant='outlined'
+                    variant='tonal'
                     sx={{ flex: 1, minHeight: 40, minWidth: 0, whiteSpace: 'normal' }}
                     color='error'
                     disabled={busy}
