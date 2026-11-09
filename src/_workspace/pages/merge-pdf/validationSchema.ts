@@ -1,3 +1,4 @@
+import dayjs from 'dayjs'
 import { MRT_FilterFns } from 'material-react-table'
 import { z } from 'zod'
 
@@ -28,6 +29,8 @@ export const mergePdfDefaultColumnOrder = [
   'REVISION_NO',
   'DOCUMENT_COUNT',
   'PAGE_COUNT',
+  'CREATE_DATE',
+  'CREATE_BY',
   'UPDATE_DATE',
   'UPDATE_BY'
 ] as const
@@ -38,7 +41,13 @@ export const mergePdfListSchema = z.object({
   searchFilters: z.object({
     documentName: z.string(),
     includingCancelled: z.boolean(),
-    status: z.object({ value: z.enum(['DRAFT', 'COMPLETED']), label: z.string() }).nullable()
+    status: z.object({ value: z.enum(['DRAFT', 'COMPLETED']), label: z.string() }).nullable(),
+    createdBy: z.string(),
+    createDateFrom: z.date().nullable(),
+    createDateTo: z.date().nullable(),
+    updatedBy: z.string(),
+    updateDateFrom: z.date().nullable(),
+    updateDateTo: z.date().nullable()
   }),
   searchResults: z.object({
     pageSize: z.number().min(10),
@@ -57,7 +66,17 @@ export const mergePdfListSchema = z.object({
 export type MergePdfListValues = z.infer<typeof mergePdfListSchema>
 
 const defaultListValues = (): MergePdfListValues => ({
-  searchFilters: { documentName: '', status: null, includingCancelled: false },
+  searchFilters: {
+    documentName: '',
+    status: null,
+    includingCancelled: false,
+    createdBy: '',
+    createDateFrom: null,
+    createDateTo: null,
+    updatedBy: '',
+    updateDateFrom: null,
+    updateDateTo: null
+  },
   searchResults: {
     pageSize: 10,
     columnFilters: [],
@@ -73,6 +92,8 @@ const defaultListValues = (): MergePdfListValues => ({
       JOB_TITLE: MRT_FilterFns.contains.name,
       DOCUMENT_COUNT: MRT_FilterFns.equals.name,
       PAGE_COUNT: MRT_FilterFns.equals.name,
+      CREATE_DATE: MRT_FilterFns.equals.name,
+      CREATE_BY: MRT_FilterFns.contains.name,
       UPDATE_DATE: MRT_FilterFns.equals.name,
       UPDATE_BY: MRT_FilterFns.contains.name
     }
@@ -98,9 +119,21 @@ export const fetchMergePdfListValues = async (menuId: number): Promise<MergePdfL
 
     const currentColumns = new Set<string>(columns)
     const needsColumnOrderMigration = (saved.searchResults?.columnOrderVersion ?? 0) < 1
-    const columnOrder = resolveColumnOrder(saved.searchResults?.columnOrder ?? [], columns, documentStatusColumnIds, needsColumnOrderMigration)
+    const columnOrder = resolveColumnOrder(
+      saved.searchResults?.columnOrder ?? [],
+      columns,
+      documentStatusColumnIds,
+      needsColumnOrderMigration
+    )
     return {
-      searchFilters: { ...defaults.searchFilters, ...saved.searchFilters },
+      searchFilters: {
+        ...defaults.searchFilters,
+        ...saved.searchFilters,
+        createDateFrom: restoreMergePdfSearchDate(saved.searchFilters?.createDateFrom),
+        createDateTo: restoreMergePdfSearchDate(saved.searchFilters?.createDateTo),
+        updateDateFrom: restoreMergePdfSearchDate(saved.searchFilters?.updateDateFrom),
+        updateDateTo: restoreMergePdfSearchDate(saved.searchFilters?.updateDateTo)
+      },
       searchResults: {
         ...defaults.searchResults,
         ...saved.searchResults,
@@ -123,3 +156,9 @@ export const fetchMergePdfListValues = async (menuId: number): Promise<MergePdfL
     return defaults
   }
 }
+
+export const restoreMergePdfSearchDate = (value: Date | string | null | undefined): Date | null =>
+  value && dayjs(value).isValid() ? dayjs(value).toDate() : null
+
+export const formatMergePdfSearchDate = (value: Date | string | null | undefined): string | null =>
+  value && dayjs(value).isValid() ? dayjs(value).format('YYYY-MM-DD HH:mm:ss') : null

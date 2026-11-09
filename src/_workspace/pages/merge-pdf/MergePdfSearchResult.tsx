@@ -32,6 +32,7 @@ import MergePdfPreviewModal from './MergePdfPreviewModal'
 import { mergePdfDefaultColumnOrder, type MergePdfListValues } from './validationSchema'
 import { documentStatusColumns } from './documentStatus'
 import DocumentStatusIndicator from './DocumentStatusIndicator'
+import { formatMergePdfSearchDate } from './validationSchema'
 
 interface Props {
   onOpen: (jobId: number) => void
@@ -87,7 +88,13 @@ const MergePdfSearchResult = ({ onOpen, onAdd, refreshVersion }: Props) => {
       titleFilter,
       updateByFilter,
       sortBy,
-      sortDesc: firstSort?.desc ?? true
+      sortDesc: firstSort?.desc ?? true,
+      createdBy: filters.createdBy.trim(),
+      createDateFrom: formatMergePdfSearchDate(filters.createDateFrom),
+      createDateTo: formatMergePdfSearchDate(filters.createDateTo),
+      updatedBy: filters.updatedBy.trim(),
+      updateDateFrom: formatMergePdfSearchDate(filters.updateDateFrom),
+      updateDateTo: formatMergePdfSearchDate(filters.updateDateTo)
     },
     isEnableFetching
   )
@@ -211,6 +218,25 @@ const MergePdfSearchResult = ({ onOpen, onAdd, refreshVersion }: Props) => {
       },
       { accessorKey: 'DOCUMENT_COUNT', header: 'FILES', size: 155, minSize: 150, enableColumnFilter: false },
       { accessorKey: 'PAGE_COUNT', header: 'PAGES', size: 155, minSize: 150, enableColumnFilter: false },
+      {
+        accessorKey: 'CREATE_DATE',
+        header: 'CREATE DATE',
+        size: 190,
+        minSize: 190,
+        enableColumnFilter: false,
+        Cell: ({ row }) =>
+          row.original.CREATE_DATE ? dayjs(row.original.CREATE_DATE).format('DD-MMM-YYYY HH:mm:ss') : '-'
+      },
+      {
+        accessorKey: 'CREATE_BY',
+        header: 'CREATE BY',
+        size: 160,
+        minSize: 160,
+        filterVariant: 'text',
+        columnFilterModeOptions: ['contains'],
+        filterFn: 'contains',
+        Cell: ({ row }) => row.original.CREATE_BY ?? '-'
+      },
       {
         accessorKey: 'UPDATE_DATE',
         header: 'UPDATE DATE',

@@ -22,6 +22,35 @@ export const useMergePdfJobs = (params: Parameters<typeof MergePdfServices.list>
     placeholderData: keepPreviousData,
     enabled
   })
+export const useMergePdfDashboard = (
+  from: string | null,
+  to: string | null,
+  createdBy: string,
+  updatedFrom: string | null,
+  updatedTo: string | null,
+  updatedBy: string,
+  enabled = true
+) =>
+  useQuery({
+    queryKey: [key, 'dashboard', from, to, createdBy, updatedFrom, updatedTo, updatedBy],
+    queryFn: () => MergePdfServices.dashboard(from, to, createdBy, updatedFrom, updatedTo, updatedBy),
+    enabled
+  })
+export const useMergePdfDashboardStatusJobs = (
+  from: string | null,
+  to: string | null,
+  createdBy: string,
+  updatedFrom: string | null,
+  updatedTo: string | null,
+  updatedBy: string,
+  status: 'DRAFT' | 'COMPLETED' | null
+) =>
+  useQuery({
+    queryKey: [key, 'dashboard-status', from, to, createdBy, updatedFrom, updatedTo, updatedBy, status],
+    queryFn: () =>
+      MergePdfServices.dashboardStatusJobs(from, to, createdBy, updatedFrom, updatedTo, updatedBy, status ?? 'DRAFT'),
+    enabled: Boolean(status)
+  })
 export const useMergePdfDetail = (jobId: number | null) =>
   useQuery({
     queryKey: [key, 'detail', jobId],
@@ -86,6 +115,7 @@ export const useMergePdfActions = () => {
     const detail = response.data.ResultOnDb[0]
     queryClient.setQueryData([key, 'detail', detail.job.JOB_ID], response)
     void queryClient.invalidateQueries({ queryKey: [key, 'jobs'] })
+    void queryClient.invalidateQueries({ queryKey: [key, 'dashboard'] })
     return detail
   }
   return {
@@ -113,7 +143,8 @@ export const useMergePdfActions = () => {
       }
     }),
     restoreJob: useMutation({
-      mutationFn: (input: { jobId: number; rowVersion: number }) => MergePdfServices.restoreJob(input.jobId, input.rowVersion),
+      mutationFn: (input: { jobId: number; rowVersion: number }) =>
+        MergePdfServices.restoreJob(input.jobId, input.rowVersion),
       onSuccess: accept
     }),
     deleteJob: useMutation({
@@ -127,6 +158,7 @@ export const useMergePdfActions = () => {
         queryClient.removeQueries({ queryKey: [key, 'page-preview', input.jobId] })
         queryClient.removeQueries({ queryKey: [key, 'page-thumbnail', input.jobId] })
         void queryClient.invalidateQueries({ queryKey: [key, 'jobs'] })
+        void queryClient.invalidateQueries({ queryKey: [key, 'dashboard'] })
       }
     }),
     saveDraft: useMutation({

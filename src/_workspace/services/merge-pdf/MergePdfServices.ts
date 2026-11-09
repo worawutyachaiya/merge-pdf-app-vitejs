@@ -1,5 +1,12 @@
 import MergePdfAPI from '@/_workspace/api/merge-pdf/MergePdfAPI'
-import type { BatchPageAction, MergePdfDetail, MergePdfForm, MergePdfJob } from '@/_workspace/types/merge-pdf/MergePdf'
+import type {
+  BatchPageAction,
+  MergePdfDashboardJob,
+  MergePdfDashboardSummary,
+  MergePdfDetail,
+  MergePdfForm,
+  MergePdfJob
+} from '@/_workspace/types/merge-pdf/MergePdf'
 import axiosRequest from '@/libs/axios/axiosRequest'
 import type { ResultDataResponseI } from '@/libs/axios/types/AxiosResponseInterface'
 import type { AxiosRequestConfig, AxiosResponse } from 'axios'
@@ -128,11 +135,48 @@ export default class MergePdfServices {
     updateByFilter: string
     sortBy: 'JOB_TITLE' | 'STATUS' | 'DOCUMENT_COUNT' | 'PAGE_COUNT' | 'UPDATE_DATE' | 'UPDATE_BY'
     sortDesc: boolean
+    createdBy: string
+    createDateFrom: string | null
+    createDateTo: string | null
+    updatedBy: string
+    updateDateFrom: string | null
+    updateDateTo: string | null
   }) {
     return axiosRequest<ResultDataResponseI<MergePdfJob>>({
       url: `${root}/jobs/search`,
       method: 'POST',
       data: params
+    })
+  }
+
+  static dashboard(
+    from: string | null,
+    to: string | null,
+    createdBy: string,
+    updatedFrom: string | null,
+    updatedTo: string | null,
+    updatedBy: string
+  ) {
+    return axiosRequest<ResultDataResponseI<MergePdfDashboardSummary>>({
+      url: `${root}/jobs/dashboard`,
+      method: 'POST',
+      data: { from, to, createdBy, updatedFrom, updatedTo, updatedBy }
+    })
+  }
+
+  static dashboardStatusJobs(
+    from: string | null,
+    to: string | null,
+    createdBy: string,
+    updatedFrom: string | null,
+    updatedTo: string | null,
+    updatedBy: string,
+    status: 'DRAFT' | 'COMPLETED'
+  ) {
+    return axiosRequest<ResultDataResponseI<MergePdfDashboardJob>>({
+      url: `${root}/jobs/dashboard/status`,
+      method: 'POST',
+      data: { from, to, createdBy, updatedFrom, updatedTo, updatedBy, status }
     })
   }
 
