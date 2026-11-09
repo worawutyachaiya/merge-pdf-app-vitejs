@@ -5,6 +5,7 @@ import workerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
 import { jobStampCoordinates, resizeStamp, stampFromPointer, type StampCoordinates } from './stampPlacement'
 import PageAnnotationLayer from './PageAnnotationLayer'
 import { annotationId, loadEStampImage, type PageAnnotation } from './pageAnnotations'
+import MergePdfServices from '@/_workspace/services/merge-pdf/MergePdfServices'
 
 GlobalWorkerOptions.workerSrc = workerUrl
 
@@ -143,8 +144,15 @@ export default function FitPagePreview({ previewUrl, pageNumber, visualDeskew = 
   const addRemark = () => {
     if (!onAnnotationsChange || annotations.length >= 50) return
     const id = annotationId()
-    onAnnotationsChange([...annotations, { id, kind: 'remark', text: '', x: 0.1, y: 0.1, width: 0.35, height: 0.14 }])
+    onAnnotationsChange([...annotations, { id, kind: 'remark', text: '', fontSize: 12, color: '#000000', x: 0.1, y: 0.1, width: 0.35, height: 0.14 }])
     setSelectedAnnotation(id)
+  }
+  const prepareTiffStamp = async (file: File): Promise<{ image: string; width: number; height: number }> => {
+    if (file.size > 2 * 1024 * 1024) throw new Error('Choose a TIFF image up to 2 MB.')
+    const response = await MergePdfServices.prepareEStampImage(file)
+    if (!response.data.Status || !response.data.ResultOnDb[0])
+      throw new Error(response.data.Message || 'Could not convert this TIFF image.')
+    return response.data.ResultOnDb[0]
   }
   return (
     <Box
@@ -173,13 +181,13 @@ export default function FitPagePreview({ previewUrl, pageNumber, visualDeskew = 
                 <span><Button size='small' disabled={!page || imageBusy || annotations.length >= 50}
                   startIcon={<i className='tabler-note' />} onClick={addRemark}>Remark</Button></span>
               </Tooltip>
-              <Tooltip title='Upload an E-stamp image to include in the saved PDF'>
+              <Tooltip title='Upload a PNG, JPEG, or TIFF image to include in the saved PDF'>
                 <span><Button size='small' disabled={!page || imageBusy || annotations.length >= 50}
                   startIcon={<i className='tabler-photo-plus' />} onClick={() => imageInput.current?.click()}>
                   {imageBusy ? 'Loading…' : 'E-stamp'}
                 </Button></span>
               </Tooltip>
-              <input ref={imageInput} type='file' accept='image/png,image/jpeg' hidden
+              <input ref={imageInput} type='file' accept='image/png,image/jpeg,image/tiff,image/x-tiff,.tif,.tiff' hidden
                 onChange={async event => {
                   const file = event.target.files?.[0]
                   event.target.value = ''
@@ -188,7 +196,8 @@ export default function FitPagePreview({ previewUrl, pageNumber, visualDeskew = 
                   setImageBusy(true)
                   onAnnotationBusyChange?.(true)
                   try {
-                    const loaded = await loadEStampImage(file)
+                    const isTiff = ['image/tiff', 'image/x-tiff'].includes(file.type.toLowerCase()) || /\.tiff?$/i.test(file.name)
+                    const loaded = isTiff ? await prepareTiffStamp(file) : await loadEStampImage(file)
                     let width = 0.25, height = width * natural.width / natural.height * loaded.height / loaded.width
                     if (height > 0.4) { width *= 0.4 / height; height = 0.4 }
                     // Very narrow image ratios would make the handles unusable.

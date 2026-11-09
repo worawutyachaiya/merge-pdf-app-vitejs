@@ -22,6 +22,17 @@ const auditRequest = <T>(options: AxiosRequestConfig): Promise<AxiosResponse<T>>
 }
 
 export default class MergePdfServices {
+  static prepareEStampImage(file: File) {
+    const data = new FormData()
+    data.append('file', file)
+    return auditRequest<ResultDataResponseI<{ image: string; width: number; height: number }>>({
+      url: `${root}/editor/estamp-image`,
+      method: 'POST',
+      data,
+      headers: { 'Content-Type': false }
+    })
+  }
+
   static detectDocumentType(file: File) {
     const data = new FormData()
     data.append('file', file)

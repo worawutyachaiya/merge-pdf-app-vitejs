@@ -7,7 +7,7 @@ export interface AnnotationPlacement {
 }
 
 export type PageAnnotation = AnnotationPlacement & (
-  { kind: 'remark'; text: string } | { kind: 'estamp'; image: string }
+  { kind: 'remark'; text: string; fontSize?: number; color?: string } | { kind: 'estamp'; image: string }
 )
 
 // UAT runs on HTTP; getRandomValues works there while randomUUID requires HTTPS.

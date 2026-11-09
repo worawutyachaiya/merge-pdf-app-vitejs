@@ -1,6 +1,30 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Box, GlobalStyles, IconButton } from '@mui/material'
 import { moveAnnotation, resizeAnnotation, type PageAnnotation } from './pageAnnotations'
+
+type Remark = Extract<PageAnnotation, { kind: 'remark' }>
+
+function RemarkFormatting({ item, onUpdate }: { item: Remark; onUpdate: (item: Remark) => void }) {
+  const [size, setSize] = useState(String(item.fontSize ?? 12))
+  useEffect(() => { setSize(String(item.fontSize ?? 12)) }, [item.id, item.fontSize])
+  return <>
+    <Box component='input' type='number' aria-label='Remark font size in points' title='Font size (6–72 pt)'
+      min={6} max={72} step={1} value={size}
+      onChange={event => {
+        const value = event.target.value
+        setSize(value)
+        if (value.trim() && Number.isFinite(Number(value)) && Number(value) >= 6 && Number(value) <= 72)
+          onUpdate({ ...item, fontSize: Number(value) })
+      }}
+      onBlur={() => setSize(String(item.fontSize ?? 12))}
+      sx={{ width: 58, height: 26, fontSize: 13, color: 'text.primary', bgcolor: 'background.paper',
+        border: 1, borderColor: 'divider', borderRadius: 0.5, pl: 1 }} />
+    <Box component='span' sx={{ fontSize: 12, color: 'text.secondary' }}>pt</Box>
+    <Box component='input' type='color' aria-label='Remark text color' title='Text color'
+      value={item.color ?? '#000000'} onChange={event => onUpdate({ ...item, color: event.target.value })}
+      sx={{ width: 28, height: 26, p: 0, border: 0, bgcolor: 'transparent', cursor: 'pointer' }} />
+  </>
+}
 
 interface Props {
   annotations: PageAnnotation[]
@@ -81,9 +105,9 @@ export default function PageAnnotationLayer({ annotations, width, height, scale,
             sx={{
               position: 'absolute', left: item.x * width, top: item.y * height,
               width: item.width * width, height: item.height * height,
-              pointerEvents: 'auto', outline: selected ? '2px solid' : item.kind === 'remark' ? '1px dashed' : 'none',
-              outlineColor: selected ? 'primary.main' : '#a67c00', zIndex: selected ? 3 : 1,
-              bgcolor: item.kind === 'remark' ? '#fff4b8' : 'transparent', cursor, touchAction: 'none'
+              pointerEvents: 'auto', outline: selected ? '2px solid' : 'none',
+              outlineColor: 'primary.main', zIndex: selected ? 3 : 1,
+              bgcolor: 'transparent', cursor, touchAction: 'none'
             }}>
             {item.kind === 'estamp' ? (
               <Box component='img' src={item.image} alt='E-stamp' draggable={false}
@@ -91,29 +115,42 @@ export default function PageAnnotationLayer({ annotations, width, height, scale,
                 sx={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block', cursor, userSelect: 'none' }} />
             ) : (
               <>
-                <Box onPointerDown={event => begin(event, item)} {...gesture}
-                  title='Drag to move remark · visible only in editor'
-                  sx={{ height: Math.max(18, 15 * scale), px: 0.5, bgcolor: '#f0d76c', color: '#4b3900',
-                    fontSize: Math.max(10, 9 * scale), overflow: 'hidden', whiteSpace: 'nowrap', cursor }}>
-                  <i className='tabler-grip-horizontal' /> Remark · Edit only
-                </Box>
                 <Box component='textarea' value={item.text} readOnly={!onChange}
                   aria-label='Remark text, not included in PDF' maxLength={2000}
+                  placeholder={onChange ? 'Remark…' : undefined}
                   onChange={event => update({ ...item, text: event.target.value })}
                   onPointerDown={event => { event.stopPropagation(); onSelect(item.id) }}
-                  sx={{ display: 'block', width: '100%', height: `calc(100% - ${Math.max(18, 15 * scale)}px)`,
-                    minHeight: 0, resize: 'none', border: 0, outline: 0, bgcolor: 'transparent', color: '#332b00',
-                    fontFamily: 'Arial, sans-serif', fontSize: Math.max(10, 12 * scale), p: 0.5, boxSizing: 'border-box' }} />
+                  sx={{ display: 'block', width: '100%', height: '100%',
+                    minHeight: 0, resize: 'none', border: 0, outline: 0, bgcolor: 'transparent', color: item.color ?? '#000000',
+                    fontFamily: 'Arial, sans-serif', fontSize: (item.fontSize ?? 12) * scale, lineHeight: 1.25,
+                    p: 0, m: 0, boxSizing: 'border-box' }} />
               </>
             )}
             {selected && (
               <>
-                <IconButton size='small' aria-label={`Remove ${item.kind === 'remark' ? 'remark' : 'E-stamp'}`}
+                {item.kind === 'remark' && (
+                  <Box role='toolbar' aria-label='Remark formatting'
+                    onPointerDown={event => event.stopPropagation()} onKeyDown={event => event.stopPropagation()}
+                    sx={{ position: 'absolute', top: item.y * height >= 38 ? -38 : item.height * height + 8,
+                      left: Math.max(-item.x * width + 4, Math.min(0, width - item.x * width - 220)),
+                      width: 212, height: 32, display: 'flex', alignItems: 'center', gap: 1, px: 1,
+                      bgcolor: 'background.paper', border: 1, borderColor: 'divider', borderRadius: 1, boxShadow: 2 }}>
+                    <IconButton size='small' aria-label='Move remark' title='Drag to move remark'
+                      onPointerDown={event => begin(event, item)} {...gesture} sx={{ cursor, width: 26, height: 26 }}>
+                      <i className='tabler-grip-horizontal' />
+                    </IconButton>
+                    <RemarkFormatting item={item} onUpdate={update} />
+                    <IconButton size='small' aria-label='Remove remark'
+                      onClick={event => { event.stopPropagation(); onChange?.(annotations.filter(other => other.id !== item.id)); onSelect(null) }}
+                      sx={{ color: 'error.main', width: 26, height: 26 }}><i className='tabler-x' /></IconButton>
+                  </Box>
+                )}
+                {item.kind === 'estamp' && <IconButton size='small' aria-label='Remove E-stamp'
                   onPointerDown={event => event.stopPropagation()}
                   onClick={event => { event.stopPropagation(); onChange?.(annotations.filter(other => other.id !== item.id)); onSelect(null) }}
                   sx={{ position: 'absolute', top: 2, right: 2, width: 24, height: 24, bgcolor: 'background.paper', color: 'error.main', boxShadow: 1 }}>
                   <i className='tabler-x' />
-                </IconButton>
+                </IconButton>}
                 {[{ x: -1, y: -1 }, { x: 1, y: -1 }, { x: -1, y: 1 }, { x: 1, y: 1 }].map(corner => (
                   <Box key={`${corner.x}:${corner.y}`} component='span' role='button' tabIndex={0}
                     aria-label={`Resize ${item.kind} ${corner.x < 0 ? 'left' : 'right'} ${corner.y < 0 ? 'top' : 'bottom'}`}
