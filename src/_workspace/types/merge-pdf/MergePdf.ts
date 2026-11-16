@@ -3,6 +3,9 @@ export interface MergePdfJob {
   INUSE: number
   JOB_CODE: string
   JOB_TITLE: string
+  STAMP_X?: number | null
+  STAMP_Y?: number | null
+  STAMP_FONT_SIZE?: number | null
   JOB_REFERENCE: string | null
   STATUS: 'DRAFT' | 'COMPLETING' | 'COMPLETED'
   ROW_VERSION: number
@@ -20,6 +23,20 @@ export interface MergePdfJob {
   UNCLASSIFIED_PAGE_COUNT?: number
 }
 
+export interface MergePdfDashboardSummary {
+  draftCount: number
+  completedCount: number
+}
+
+export interface MergePdfDashboardJob {
+  JOB_ID: number
+  JOB_CODE: string
+  JOB_TITLE: string
+  STATUS: 'DRAFT' | 'COMPLETED'
+  CREATE_DATE: string
+  DOCUMENT_COUNT: number
+}
+
 export interface MergePdfDocument {
   DOCUMENT_ID: number
   JOB_ID: number
@@ -35,6 +52,7 @@ export interface MergePdfDocument {
 }
 
 export interface MergePdfPage {
+  EDITOR_ANNOTATIONS?: import('@/_workspace/pages/merge-pdf/pageAnnotations').PageAnnotation[] | null
   PAGE_ID: number
   DOCUMENT_ID: number
   SOURCE_PAGE_NUMBER: number

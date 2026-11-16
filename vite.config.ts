@@ -2,6 +2,9 @@ import react from '@vitejs/plugin-react'
 
 import { defineConfig, loadEnv } from 'vite'
 import path from 'path'
+import { fileURLToPath } from 'node:url'
+
+const projectDirectory = path.dirname(fileURLToPath(import.meta.url))
 import tailwindcss from '@tailwindcss/vite'
 
 export default defineConfig(({ mode }) => {
@@ -23,17 +26,17 @@ export default defineConfig(({ mode }) => {
     },
     resolve: {
       alias: {
-        '@': path.resolve(__dirname, './src'),
-        '@core': path.resolve(__dirname, './src/@core'),
-        '@layouts': path.resolve(__dirname, './src/@layouts'),
-        '@menu': path.resolve(__dirname, './src/@menu'),
-        '@assets': path.resolve(__dirname, './src/assets'),
-        '@components': path.resolve(__dirname, './src/components'),
-        '@configs': path.resolve(__dirname, './src/configs'),
-        '@views': path.resolve(__dirname, './src/views'),
-        '@_workspace': path.resolve(__dirname, './src/_workspace'),
-        '@libs': path.resolve(__dirname, './src/libs'),
-        '@utils': path.resolve(__dirname, './src/utils')
+        '@': path.resolve(projectDirectory, './src'),
+        '@core': path.resolve(projectDirectory, './src/@core'),
+        '@layouts': path.resolve(projectDirectory, './src/@layouts'),
+        '@menu': path.resolve(projectDirectory, './src/@menu'),
+        '@assets': path.resolve(projectDirectory, './src/assets'),
+        '@components': path.resolve(projectDirectory, './src/components'),
+        '@configs': path.resolve(projectDirectory, './src/configs'),
+        '@views': path.resolve(projectDirectory, './src/views'),
+        '@_workspace': path.resolve(projectDirectory, './src/_workspace'),
+        '@libs': path.resolve(projectDirectory, './src/libs'),
+        '@utils': path.resolve(projectDirectory, './src/utils')
       }
     },
     define: Object.fromEntries(Object.entries(env).map(([k, v]) => [`import.meta.env.${k}`, JSON.stringify(v)]))

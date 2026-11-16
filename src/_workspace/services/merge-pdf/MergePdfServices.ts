@@ -1,5 +1,12 @@
 import MergePdfAPI from '@/_workspace/api/merge-pdf/MergePdfAPI'
-import type { BatchPageAction, MergePdfDetail, MergePdfForm, MergePdfJob } from '@/_workspace/types/merge-pdf/MergePdf'
+import type {
+  BatchPageAction,
+  MergePdfDashboardJob,
+  MergePdfDashboardSummary,
+  MergePdfDetail,
+  MergePdfForm,
+  MergePdfJob
+} from '@/_workspace/types/merge-pdf/MergePdf'
 import axiosRequest from '@/libs/axios/axiosRequest'
 import type { ResultDataResponseI } from '@/libs/axios/types/AxiosResponseInterface'
 import type { AxiosRequestConfig, AxiosResponse } from 'axios'
@@ -22,6 +29,17 @@ const auditRequest = <T>(options: AxiosRequestConfig): Promise<AxiosResponse<T>>
 }
 
 export default class MergePdfServices {
+  static prepareEStampImage(file: File) {
+    const data = new FormData()
+    data.append('file', file)
+    return auditRequest<ResultDataResponseI<{ image: string; width: number; height: number }>>({
+      url: `${root}/editor/estamp-image`,
+      method: 'POST',
+      data,
+      headers: { 'Content-Type': false }
+    })
+  }
+
   static detectDocumentType(file: File) {
     const data = new FormData()
     data.append('file', file)
@@ -92,19 +110,24 @@ export default class MergePdfServices {
   }
 
   static nextCode(month?: string) {
-    return axiosRequest<ResultDataResponseI<{ code: string }>>({ url: `${root}/jobs/next-code`, params: { month }, method: 'GET' })
+    return axiosRequest<ResultDataResponseI<{ code: string }>>({
+      url: `${root}/jobs/next-code`,
+      data: { month },
+      method: 'POST'
+    })
   }
 
   static batchPages(jobId: number, rowVersion: number, pageIds: number[], action: BatchPageAction) {
     return auditRequest<ResultDataResponseI<MergePdfDetail>>({
       url: `${root}/jobs/${jobId}/pages/batch`,
-      method: 'PATCH',
+      method: 'POST',
       data: { rowVersion, pageIds, action }
     })
   }
 
   static list(params: {
     search: string
+    includingCancelled?: boolean
     status: 'ALL' | 'DRAFT' | 'COMPLETED'
     page: number
     pageSize: number
@@ -112,6 +135,12 @@ export default class MergePdfServices {
     updateByFilter: string
     sortBy: 'JOB_TITLE' | 'STATUS' | 'DOCUMENT_COUNT' | 'PAGE_COUNT' | 'UPDATE_DATE' | 'UPDATE_BY'
     sortDesc: boolean
+    createdBy: string
+    createDateFrom: string | null
+    createDateTo: string | null
+    updatedBy: string
+    updateDateFrom: string | null
+    updateDateTo: string | null
   }) {
     return axiosRequest<ResultDataResponseI<MergePdfJob>>({
       url: `${root}/jobs/search`,
@@ -120,10 +149,41 @@ export default class MergePdfServices {
     })
   }
 
+  static dashboard(
+    from: string | null,
+    to: string | null,
+    createdBy: string,
+    updatedFrom: string | null,
+    updatedTo: string | null,
+    updatedBy: string
+  ) {
+    return axiosRequest<ResultDataResponseI<MergePdfDashboardSummary>>({
+      url: `${root}/jobs/dashboard`,
+      method: 'POST',
+      data: { from, to, createdBy, updatedFrom, updatedTo, updatedBy }
+    })
+  }
+
+  static dashboardStatusJobs(
+    from: string | null,
+    to: string | null,
+    createdBy: string,
+    updatedFrom: string | null,
+    updatedTo: string | null,
+    updatedBy: string,
+    status: 'DRAFT' | 'COMPLETED'
+  ) {
+    return axiosRequest<ResultDataResponseI<MergePdfDashboardJob>>({
+      url: `${root}/jobs/dashboard/status`,
+      method: 'POST',
+      data: { from, to, createdBy, updatedFrom, updatedTo, updatedBy, status }
+    })
+  }
+
   static detail(jobId: number) {
     return axiosRequest<ResultDataResponseI<MergePdfDetail>>({
       url: `${root}/jobs/${jobId}/detail`,
-      method: 'GET'
+      method: 'POST'
     })
   }
 
@@ -138,7 +198,7 @@ export default class MergePdfServices {
   static saveDraft(jobId: number, rowVersion: number, fields: MergePdfForm) {
     return auditRequest<ResultDataResponseI<MergePdfDetail>>({
       url: `${root}/jobs/${jobId}/save-draft`,
-      method: 'PATCH',
+      method: 'POST',
       data: { ...fields, rowVersion }
     })
   }
@@ -146,15 +206,32 @@ export default class MergePdfServices {
   static deleteDraft(jobId: number, rowVersion: number) {
     return auditRequest<ResultDataResponseI<{ JOB_ID: number }>>({
       url: `${root}/jobs/${jobId}/delete-draft`,
-      method: 'DELETE',
+      method: 'POST',
       data: { rowVersion }
+    })
+  }
+
+  static restoreJob(jobId: number, rowVersion: number) {
+    return auditRequest<ResultDataResponseI<MergePdfDetail>>({
+      url: `${root}/jobs/${jobId}/restore`,
+      method: 'POST',
+      data: { rowVersion }
+    })
+  }
+
+  static categoryPdf(jobId: number, categoryId: number, signal?: AbortSignal) {
+    return axiosRequest<Blob>({
+      url: `${root}/jobs/${jobId}/categories/${categoryId}/pdf`,
+      method: 'POST',
+      responseType: 'blob',
+      signal
     })
   }
 
   static deleteJob(jobId: number, rowVersion: number) {
     return auditRequest<ResultDataResponseI<{ JOB_ID: number }>>({
       url: `${root}/jobs/${jobId}/delete`,
-      method: 'DELETE',
+      method: 'POST',
       data: { rowVersion }
     })
   }
@@ -162,7 +239,7 @@ export default class MergePdfServices {
   static source(jobId: number, documentId: number) {
     return axiosRequest<Blob>({
       url: `${root}/jobs/${jobId}/documents/${documentId}/source`,
-      method: 'GET',
+      method: 'POST',
       responseType: 'blob'
     })
   }
@@ -206,7 +283,7 @@ export default class MergePdfServices {
   static updatePageCategory(jobId: number, pageId: number, rowVersion: number, categoryId: number) {
     return auditRequest<ResultDataResponseI<MergePdfDetail>>({
       url: `${root}/jobs/${jobId}/pages/${pageId}/category`,
-      method: 'PATCH',
+      method: 'POST',
       data: { rowVersion, categoryId }
     })
   }
@@ -214,7 +291,7 @@ export default class MergePdfServices {
   static rotatePage(jobId: number, pageId: number, rowVersion: number, delta: 90 | 270) {
     return auditRequest<ResultDataResponseI<MergePdfDetail>>({
       url: `${root}/jobs/${jobId}/pages/${pageId}/rotation`,
-      method: 'PATCH',
+      method: 'POST',
       data: { rowVersion, delta }
     })
   }
@@ -222,7 +299,7 @@ export default class MergePdfServices {
   static removePage(jobId: number, pageId: number, rowVersion: number) {
     return auditRequest<ResultDataResponseI<MergePdfDetail>>({
       url: `${root}/jobs/${jobId}/pages/${pageId}/remove`,
-      method: 'DELETE',
+      method: 'POST',
       data: { rowVersion }
     })
   }
@@ -250,7 +327,7 @@ export default class MergePdfServices {
   static removeDocument(jobId: number, documentId: number, rowVersion: number) {
     return auditRequest<ResultDataResponseI<MergePdfDetail>>({
       url: `${root}/jobs/${jobId}/documents/${documentId}/remove`,
-      method: 'DELETE',
+      method: 'POST',
       data: { rowVersion }
     })
   }
@@ -258,7 +335,7 @@ export default class MergePdfServices {
   static updateEntryStatus(jobId: number, documentId: number, rowVersion: number, statusCode: string | null) {
     return auditRequest<ResultDataResponseI<MergePdfDetail>>({
       url: `${root}/jobs/${jobId}/documents/${documentId}/status`,
-      method: 'PATCH',
+      method: 'POST',
       data: { rowVersion, statusCode }
     })
   }
@@ -266,7 +343,7 @@ export default class MergePdfServices {
   static reorder(jobId: number, rowVersion: number, pageIds: number[]) {
     return auditRequest<ResultDataResponseI<MergePdfDetail>>({
       url: `${root}/jobs/${jobId}/pages/reorder`,
-      method: 'PATCH',
+      method: 'POST',
       data: { rowVersion, pageIds }
     })
   }
@@ -282,7 +359,7 @@ export default class MergePdfServices {
   static preview(documentId: number) {
     return axiosRequest<Blob>({
       url: `${root}/documents/${documentId}/preview`,
-      method: 'GET',
+      method: 'POST',
       responseType: 'blob'
     })
   }
@@ -290,7 +367,7 @@ export default class MergePdfServices {
   static download(jobId: number, publicationId: number, signal?: AbortSignal) {
     return axiosRequest<Blob>({
       url: `${root}/jobs/${jobId}/publications/${publicationId}/pdf`,
-      method: 'GET',
+      method: 'POST',
       responseType: 'blob',
       signal
     })

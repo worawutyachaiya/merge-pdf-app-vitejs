@@ -10,7 +10,7 @@ export default class SettingsServices {
   static documentOrder() {
     return axiosRequest<ResultDataResponseI<DocumentOrderCategory>>({
       url: `${root}/document-order/get`,
-      method: 'GET'
+      method: 'POST'
     })
   }
 
@@ -21,7 +21,7 @@ export default class SettingsServices {
       return Promise.reject(new Error('Employee code is missing. Please sign in again.'))
     return axiosRequest<ResultDataResponseI<DocumentOrderCategory>>({
       url: `${root}/document-order/update`,
-      method: 'PATCH',
+      method: 'POST',
       data: { order, CREATE_BY: employeeCode, UPDATE_BY: employeeCode }
     })
   }

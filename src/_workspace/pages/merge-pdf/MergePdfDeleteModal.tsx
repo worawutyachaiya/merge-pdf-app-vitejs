@@ -39,7 +39,7 @@ const MergePdfDeleteModal = ({ job, onClose, onDeleted }: Props) => {
       isDelete
       isLoading={actions.deleteJob.isPending}
       title='Delete document'
-      description={`Delete "${job.OUTPUT_FILE_NAME ?? job.JOB_TITLE}" and its PDF from the shared folder? This also removes the document from search results.`}
+      description={`Delete "${job.OUTPUT_FILE_NAME ?? job.JOB_TITLE}" and its PDF from the shared folder? You can find it using Including Cancelled and restore it later.`}
       confirmLabel='Delete'
     />
   )

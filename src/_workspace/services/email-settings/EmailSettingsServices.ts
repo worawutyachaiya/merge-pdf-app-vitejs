@@ -17,21 +17,21 @@ const auditRequest = <T>(options: AxiosRequestConfig): Promise<AxiosResponse<T>>
 
 export default class EmailSettingsServices {
   static settings() {
-    return axiosRequest<ResultDataResponseI<EmailSettings>>({ url: `${root}/get`, method: 'GET' })
+    return axiosRequest<ResultDataResponseI<EmailSettings>>({ url: `${root}/get`, method: 'POST' })
   }
 
   static accountingPeople(search: string) {
     return axiosRequest<ResultDataResponseI<AccountingPerson>>({
       url: `${root}/accounting-people`,
-      method: 'GET',
-      params: { search }
+      method: 'POST',
+      data: { search }
     })
   }
 
   static save(scheduleTime: string, employeeCodes: string[]) {
     return auditRequest<ResultDataResponseI<EmailSettings>>({
       url: `${root}/update`,
-      method: 'PATCH',
+      method: 'POST',
       data: { scheduleTime, employeeCodes }
     })
   }

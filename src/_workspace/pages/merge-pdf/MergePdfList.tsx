@@ -1,4 +1,5 @@
 import { useEffect } from 'react'
+import { useState } from 'react'
 
 import { zodResolver } from '@hookform/resolvers/zod'
 import Grid from '@mui/material/Grid'
@@ -10,8 +11,13 @@ import SkeletonCustom from '@/components/SkeletonCustom'
 
 import { MENU_ID } from './env'
 import MergePdfSearchFilters from './MergePdfSearchFilters'
+import MergePdfDashboard from './MergePdfDashboard'
 import MergePdfSearchResult from './MergePdfSearchResult'
-import { fetchMergePdfListValues, mergePdfListSchema, type MergePdfListValues } from './validationSchema'
+import {
+  fetchMergePdfListValues,
+  mergePdfListSchema,
+  type MergePdfListValues
+} from './validationSchema'
 
 interface Props {
   onOpen: (jobId: number) => void
@@ -21,9 +27,14 @@ interface Props {
 
 const InnerList = ({ onOpen, onAdd, refreshVersion }: Props) => {
   const { setIsEnableFetching } = useDxContext()
+  const [appliedSearchFilters, setAppliedSearchFilters] = useState<MergePdfListValues['searchFilters'] | null>(null)
   const methods = useForm<MergePdfListValues>({
     resolver: zodResolver(mergePdfListSchema),
-    defaultValues: async () => fetchMergePdfListValues(MENU_ID)
+    defaultValues: async () => {
+      const values = await fetchMergePdfListValues(MENU_ID)
+      setAppliedSearchFilters(values.searchFilters)
+      return values
+    }
   })
   const { control } = methods
   const { isLoading } = useFormState({ control })
@@ -44,8 +55,13 @@ const InnerList = ({ onOpen, onAdd, refreshVersion }: Props) => {
         />
       )}
       <Grid container spacing={6}>
+        {!isLoading && (
+          <Grid size={12}>
+            {appliedSearchFilters && <MergePdfDashboard onOpen={onOpen} searchFilters={appliedSearchFilters} />}
+          </Grid>
+        )}
         <Grid size={12}>
-          <MergePdfSearchFilters />
+          <MergePdfSearchFilters onSearch={setAppliedSearchFilters} />
         </Grid>
         <Grid size={12}>
           {isLoading ? (
