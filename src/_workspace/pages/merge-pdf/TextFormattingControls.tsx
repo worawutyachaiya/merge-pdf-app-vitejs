@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Box, IconButton, Tooltip } from '@mui/material'
-import { fontFamilies, fontVariant, isSystemFont, type FontFamily, type SystemFontAvailability, type TextStyle } from './textFormatting'
+import { fontFamilies, fontVariant, isSystemFont, type FontFamily, type SystemFontAvailability, type SystemFontFamily, type TextStyle } from './textFormatting'
 
 const toggles = [
   { key: 'bold', label: 'Bold', icon: 'bold' },
@@ -30,11 +30,12 @@ interface Props {
   size: number
   maxSize: number
   systemFonts: SystemFontAvailability
+  unavailableFontLabel: (family: SystemFontFamily) => string
   onStyleChange: (fields: Partial<TextStyle>) => void
   onSizeChange: (size: number) => void
 }
 
-export default function TextFormattingControls({ style, size, maxSize, systemFonts, onStyleChange, onSizeChange }: Props) {
+export default function TextFormattingControls({ style, size, maxSize, systemFonts, unavailableFontLabel, onStyleChange, onSizeChange }: Props) {
   const [sizeInput, setSizeInput] = useState<string | null>(null)
   const variants = isSystemFont(style.fontFamily) ? systemFonts[style.fontFamily] ?? [] : null
   const chooseFamily = (fontFamily: FontFamily) => {
@@ -59,13 +60,16 @@ export default function TextFormattingControls({ style, size, maxSize, systemFon
         title='Font family'
         value={style.fontFamily ?? 'sans'}
         onChange={event => chooseFamily(event.target.value as FontFamily)}
-        sx={fieldStyle}
+        sx={{ ...fieldStyle, maxWidth: 180 }}
       >
-        {(Object.keys(fontFamilies) as FontFamily[]).map(value => (
-          <option key={value} value={value} disabled={isSystemFont(value) && !systemFonts[value]?.length}>
-            {fontFamilies[value].label}
-          </option>
-        ))}
+        {(Object.keys(fontFamilies) as FontFamily[]).map(value => {
+          const reason = isSystemFont(value) && !systemFonts[value]?.length ? unavailableFontLabel(value) : ''
+          return (
+            <option key={value} value={value} disabled={!!reason}>
+              {fontFamilies[value].label}{reason && ` (${reason})`}
+            </option>
+          )
+        })}
       </Box>
       <Box
         component='input'

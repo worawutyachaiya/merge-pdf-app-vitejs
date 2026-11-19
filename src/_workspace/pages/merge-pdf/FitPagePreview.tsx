@@ -15,7 +15,7 @@ import {
 } from './stampPlacement'
 import PageAnnotationLayer from './PageAnnotationLayer'
 import TextFormattingControls, { AnnotationColor } from './TextFormattingControls'
-import { annotationId, annotationLabels, loadEStampImage, type PageAnnotation } from './pageAnnotations'
+import { annotationId, annotationLabels, duplicateCover, loadEStampImage, type CoverAnnotation, type PageAnnotation } from './pageAnnotations'
 import { fontVariant, isSystemFont, loadLocalSystemFonts, usesCustomFont, type SystemFontAvailability, type TextStyle } from './textFormatting'
 import MergePdfServices from '@/_workspace/services/merge-pdf/MergePdfServices'
 import './pdfEditorFonts.css'
@@ -39,11 +39,13 @@ interface Props {
   onStampSizeChange?: (fontSize: number, coordinates?: StampCoordinates) => void
   onStampStyleChange?: (fields: Partial<TextStyle>) => void
   annotations?: PageAnnotation[]
+  coverClipboard: React.RefObject<CoverAnnotation | null>
   onAnnotationsChange?: (items: PageAnnotation[]) => void
   onAnnotationBusyChange?: (busy: boolean) => void
 }
 
-export default function FitPagePreview({ previewUrl, pageNumber, visualDeskew = 0, stamp, onStampMove, onStampSizeChange, onStampStyleChange, annotations = [], onAnnotationsChange, onAnnotationBusyChange }: Props) {
+export default function FitPagePreview({ previewUrl, pageNumber, visualDeskew = 0, stamp, onStampMove, onStampSizeChange, onStampStyleChange, annotations = [], coverClipboard, onAnnotationsChange, onAnnotationBusyChange }: Props) {
+  const root = useRef<HTMLDivElement | null>(null)
   const imageInput = useRef<HTMLInputElement | null>(null)
   const [selectedAnnotation, setSelectedAnnotation] = useState<string | null>(null)
   const indexSelected = selectedAnnotation === 'index'
@@ -233,6 +235,32 @@ export default function FitPagePreview({ previewUrl, pageNumber, visualDeskew = 
     if (stampStyle.strikethrough) context.fillRect(0, baseline - stampFontSize * 0.28 - thickness / 2, measuredWidth, thickness)
   }, [page, stampName, stampScale, stampTextWidth, stampFontSize, stampHeight, baseline, stampStyle])
 
+  useEffect(() => {
+    const dialog = root.current?.closest<HTMLElement>('[role="dialog"]')
+    if (!dialog || !page || !onAnnotationsChange || imageBusy) return
+    const onShortcut = (event: KeyboardEvent) => {
+      if (event.defaultPrevented || event.isComposing ||
+        !(event.ctrlKey || event.metaKey) || event.altKey || event.shiftKey) return
+      const target = event.target
+      if (!(target instanceof HTMLElement) ||
+        target.closest('[role="dialog"]') !== dialog ||
+        target.isContentEditable || target.closest('input, textarea, select') || window.getSelection()?.toString()) return
+      const key = event.key.toLowerCase()
+      if (key === 'c' && selected?.kind === 'cover') {
+        event.preventDefault()
+        coverClipboard.current = selected
+      } else if (key === 'v' && coverClipboard.current && annotations.length < 50) {
+        event.preventDefault()
+        if (event.repeat) return
+        const copy = duplicateCover(coverClipboard.current, annotations)
+        onAnnotationsChange([...annotations, copy])
+        setSelectedAnnotation(copy.id)
+      }
+    }
+    dialog.addEventListener('keydown', onShortcut, true)
+    return () => dialog.removeEventListener('keydown', onShortcut, true)
+  }, [annotations, coverClipboard, imageBusy, onAnnotationsChange, page, selected])
+
   const zoomTo = (value: number) => setZoom(clampZoom(value))
   const addRemark = () => {
     if (!onAnnotationsChange || annotations.length >= 50) return
@@ -257,6 +285,7 @@ export default function FitPagePreview({ previewUrl, pageNumber, visualDeskew = 
   }
   return (
     <Box
+      ref={root}
       sx={{
         height: '76vh',
         minHeight: 300,
@@ -299,7 +328,7 @@ export default function FitPagePreview({ previewUrl, pageNumber, visualDeskew = 
                   {imageBusy ? 'Loading…' : 'E-stamp'}
                 </Button></span>
               </Tooltip>
-              <Tooltip title='Cover part of the saved PDF'>
+              <Tooltip title='Cover part of the saved PDF. Select a rectangle, then use Ctrl+C and Ctrl+V to copy and paste.'>
                 <span><Button size='small' disabled={!page || imageBusy || annotations.length >= 50}
                   startIcon={<i className='tabler-square' />} onClick={addCover}>Cover rectangle</Button></span>
               </Tooltip>
@@ -338,6 +367,12 @@ export default function FitPagePreview({ previewUrl, pageNumber, visualDeskew = 
               size={stampFontSize}
               maxSize={48}
               systemFonts={indexSystemFonts}
+              unavailableFontLabel={family => {
+                if (serverFonts.isError) return 'Server check failed'
+                if (!serverFonts.isSuccess) return 'Checking server'
+                if (!serverFonts.data.some(font => font.family === family && font.variants.length)) return 'Unavailable on server'
+                return localFonts.isPending ? 'Checking device' : 'No matching font on this device'
+              }}
               onStyleChange={onStampStyleChange}
               onSizeChange={onStampSizeChange}
             />
@@ -353,6 +388,7 @@ export default function FitPagePreview({ previewUrl, pageNumber, visualDeskew = 
                 size={selected.fontSize ?? 12}
                 maxSize={72}
                 systemFonts={localFonts.data ?? {}}
+                unavailableFontLabel={() => localFonts.isPending ? 'Checking device' : 'Unavailable on this device'}
                 onStyleChange={fields => updateSelected({ ...selected, ...fields })}
                 onSizeChange={fontSize => updateSelected({ ...selected, fontSize })}
               />

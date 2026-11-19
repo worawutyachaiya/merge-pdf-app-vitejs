@@ -62,6 +62,7 @@ const MergePdfSearchFilters = ({ onSearch }: Props) => {
       'searchFilters',
       {
         documentName: '',
+        hawb: '',
         status: null,
         includingCancelled: false,
         createdBy: '',
@@ -97,7 +98,7 @@ const MergePdfSearchFilters = ({ onSearch }: Props) => {
                 </Typography>
               </Divider>
             </Grid>
-            <Grid size={{ xs: 12, sm: 5 }}>
+            <Grid size={{ xs: 12, sm: 3 }}>
               <Controller
                 name='searchFilters.documentName'
                 control={control}
@@ -108,6 +109,22 @@ const MergePdfSearchFilters = ({ onSearch }: Props) => {
                     label='Document Name'
                     placeholder='Enter ...'
                     autoComplete='off'
+                  />
+                )}
+              />
+            </Grid>
+            <Grid size={{ xs: 12, sm: 3 }}>
+              <Controller
+                name='searchFilters.hawb'
+                control={control}
+                render={({ field }) => (
+                  <CustomTextField
+                    {...field}
+                    fullWidth
+                    label='HAWB'
+                    placeholder='Enter ...'
+                    autoComplete='off'
+                    inputProps={{ maxLength: 1000 }}
                   />
                 )}
               />
@@ -128,7 +145,7 @@ const MergePdfSearchFilters = ({ onSearch }: Props) => {
                 )}
               />
             </Grid>
-            <Grid size={{ xs: 12, sm: 4 }} sx={{ display: 'flex', alignItems: 'flex-end' }}>
+            <Grid size={{ xs: 12, sm: 3 }} sx={{ display: 'flex', alignItems: 'flex-end' }}>
               <Controller
                 name='searchFilters.includingCancelled'
                 control={control}

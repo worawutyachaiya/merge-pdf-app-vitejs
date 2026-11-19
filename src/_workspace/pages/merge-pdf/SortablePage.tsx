@@ -193,7 +193,7 @@ const SortablePage = ({
           </Typography>
         )}
       </Box>
-      <Box sx={{ px: 1, pb: 1 }}>
+      <Box className='merge-pdf-card-document-type' sx={{ px: 1, pb: 1 }}>
         <SelectCustom
           aria-label={`Document type for page ${page.SORT_ORDER}`}
           inputId={`merge-pdf-card-type-${page.PAGE_ID}`}

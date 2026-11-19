@@ -16,6 +16,8 @@ export type PageAnnotation = AnnotationPlacement & (
 
 export const annotationLabels = { remark: 'Remark', estamp: 'E-stamp', cover: 'Cover rectangle' }
 
+export type CoverAnnotation = Extract<PageAnnotation, { kind: 'cover' }>
+
 export const rotatePageCovers = (items: readonly PageAnnotation[], delta: 90 | 270): PageAnnotation[] =>
   items.map(item => {
     if (item.kind !== 'cover') return item
@@ -38,6 +40,19 @@ export const moveAnnotation = (item: PageAnnotation, dx: number, dy: number): Pa
   x: Math.max(0, Math.min(1 - item.width, item.x + dx)),
   y: Math.max(0, Math.min(1 - item.height, item.y + dy))
 })
+
+export const duplicateCover = (cover: CoverAnnotation, items: readonly PageAnnotation[]): PageAnnotation => {
+  let placement: PageAnnotation = cover
+  // Keep the original position on another page. Offset copies that would overlap exactly.
+  const dx = cover.x > (1 - cover.width) / 2 ? -0.02 : 0.02
+  const dy = cover.y > (1 - cover.height) / 2 ? -0.02 : 0.02
+  for (let step = 1; step <= items.length; step++) {
+    if (!items.some(item => item.kind === 'cover' && item.x === placement.x && item.y === placement.y &&
+      item.width === cover.width && item.height === cover.height)) break
+    placement = moveAnnotation(cover, dx * step, dy * step)
+  }
+  return { ...placement, id: annotationId() }
+}
 
 export const resizeAnnotation = (
   item: PageAnnotation, delta: { x: number; y: number }, corner: { x: number; y: number },

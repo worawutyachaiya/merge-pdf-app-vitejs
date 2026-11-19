@@ -54,6 +54,19 @@
     color: var(--mui-palette-text-primary) !important;
   }
 
+  .merge-pdf-card-document-type .custom-select .select__control:not(.select__control--is-disabled) {
+    border-color: var(--mui-palette-primary-main) !important;
+  }
+
+  .merge-pdf-card-document-type .custom-select .select__control:not(.select__control--is-disabled) .select__dropdown-indicator {
+    color: var(--mui-palette-primary-main);
+  }
+
+  .merge-pdf-card-document-type .custom-select .select__single-value:not(.select__single-value--is-disabled) {
+    color: var(--mui-palette-primary-main) !important;
+    font-weight: 600;
+  }
+
   .custom-select .select__multi-value {
     background-color: var(--mui-palette-action-selected) !important;
   }

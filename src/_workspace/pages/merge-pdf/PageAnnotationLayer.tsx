@@ -31,6 +31,7 @@ export default function PageAnnotationLayer({ annotations, width, height, scale,
     event.stopPropagation()
     if (!onChange || event.button !== 0) return
     event.preventDefault()
+    if (item.kind === 'cover') event.currentTarget.closest<HTMLElement>('[data-cover-annotation]')?.focus({ preventScroll: true })
     onSelect(item.id)
     drag.current = { pointerId: event.pointerId, x: event.clientX, y: event.clientY, item, corner, preview: item }
     setPreview(item)
@@ -64,6 +65,7 @@ export default function PageAnnotationLayer({ annotations, width, height, scale,
         const selected = item.id === selectedId && !!onChange
         return (
           <Box key={item.id}
+            data-cover-annotation={item.kind === 'cover' ? '' : undefined}
             onPointerDown={event => { event.stopPropagation(); onSelect(item.id) }}
             onKeyDown={event => {
               event.stopPropagation()

@@ -144,6 +144,7 @@ export default class MergePdfServices {
 
   static list(params: {
     search: string
+    hawb?: string
     includingCancelled?: boolean
     status: 'ALL' | 'DRAFT' | 'COMPLETED'
     page: number

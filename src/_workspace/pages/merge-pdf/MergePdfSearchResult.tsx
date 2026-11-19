@@ -100,6 +100,7 @@ const MergePdfSearchResult = ({ onOpen, onAdd, creatingDraft, refreshVersion }: 
   const jobs = useMergePdfJobs(
     {
       search: filters.documentName,
+      hawb: filters.hawb.trim(),
       includingCancelled: filters.includingCancelled,
       status: filters.status?.value ?? 'ALL',
       page: pagination.pageIndex + 1,

@@ -33,6 +33,7 @@ const columns = mergePdfDefaultColumnOrder
 export const mergePdfListSchema = z.object({
   searchFilters: z.object({
     documentName: z.string(),
+    hawb: z.string().max(1000),
     includingCancelled: z.boolean(),
     status: z.object({ value: z.enum(['DRAFT', 'COMPLETED']), label: z.string() }).nullable(),
     createdBy: z.string(),
@@ -61,6 +62,7 @@ export type MergePdfListValues = z.infer<typeof mergePdfListSchema>
 const defaultListValues = (): MergePdfListValues => ({
   searchFilters: {
     documentName: '',
+    hawb: '',
     status: null,
     includingCancelled: false,
     createdBy: '',

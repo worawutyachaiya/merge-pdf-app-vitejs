@@ -61,6 +61,7 @@ import Transition from '@/components/TransitionDialog'
 import SortablePage from './SortablePage'
 import PreviewThumbnail from './PreviewThumbnail'
 import FitPagePreview from './FitPagePreview'
+import type { CoverAnnotation } from './pageAnnotations'
 import { jobStampCoordinates } from './stampPlacement'
 import MergePdfList from './MergePdfList'
 import MergePdfPageThumbnail from './MergePdfPageThumbnail'
@@ -137,6 +138,7 @@ const MergePdfPage = () => {
   const [busy, setBusy] = useState(false)
   const [confirmAction, setConfirmAction] = useState<Confirmation>(null)
   const [previewOpen, setPreviewOpen] = useState(false)
+  const coverClipboard = useRef<CoverAnnotation | null>(null)
   const [deskewInput, setDeskewInput] = useState('0')
   const [movePosition, setMovePosition] = useState('')
   const [checkedPageIds, setCheckedPageIds] = useState<number[]>([])
@@ -1560,6 +1562,7 @@ const MergePdfPage = () => {
                     pageNumber={selectedPage.SORT_ORDER}
                     previewUrl={previewUrl}
                     annotations={selectedPage.EDITOR_ANNOTATIONS ?? []}
+                    coverClipboard={coverClipboard}
                     onAnnotationBusyChange={setBusy}
                     onAnnotationsChange={busy ? undefined : annotations => {
                       void changeDraft(current => ({ ...current, pages: current.pages.map(page =>
@@ -1714,14 +1717,27 @@ const MergePdfPage = () => {
                   </Stack>
                     </Stack>
                   </Box>
-                  {selectedPage.CATEGORY_ID === 1 && (
-                    <EntryStatusCheckbox
-                      source={documentsById.get(selectedPage.DOCUMENT_ID)}
+                  <Stack direction='row' alignItems='center' sx={{ flexWrap: 'wrap', gap: 1 }}>
+                    {selectedPage.CATEGORY_ID === 1 && (
+                      <EntryStatusCheckbox
+                        source={documentsById.get(selectedPage.DOCUMENT_ID)}
+                        disabled={busy}
+                        onToggle={() => void saveEntryStatus(selectedPage.DOCUMENT_ID)}
+                        confirmLabel='Confirm status 04'
+                      />
+                    )}
+                    <Button
+                      variant='text'
+                      size='small'
+                      color='error'
+                      sx={{ ml: 'auto' }}
                       disabled={busy}
-                      onToggle={() => void saveEntryStatus(selectedPage.DOCUMENT_ID)}
-                      confirmLabel='Confirm status 04'
-                    />
-                  )}
+                      startIcon={<i className='tabler-trash' />}
+                      onClick={() => removePages([selectedPage.PAGE_ID])}
+                    >
+                      Remove this page
+                    </Button>
+                  </Stack>
                   <SelectCustom
                     inputId='merge-pdf-page-type'
                     name='merge-pdf-page-type'
@@ -1740,15 +1756,6 @@ const MergePdfPage = () => {
                       if (option) void changePageCategory(selectedPage.PAGE_ID, option.value)
                     }}
                   />
-                  <Button
-                    variant='tonal'
-                    sx={{ minHeight: 40 }}
-                    color='error'
-                    disabled={busy}
-                    onClick={() => removePages([selectedPage.PAGE_ID])}
-                  >
-                    Remove this page
-                  </Button>
                   <Stack direction='row' spacing={1} alignItems='center' aria-label='Page navigation'>
                     <Tooltip title='First page'>
                       <span><IconButton color='primary' aria-label='First page' disabled={busy || selectedPageIndex <= 0}
