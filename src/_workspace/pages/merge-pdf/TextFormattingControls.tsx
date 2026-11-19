@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import { Box, IconButton, Tooltip } from '@mui/material'
-import { fontFamilies, fontVariant, isSystemFont, type FontFamily, type SystemFontAvailability, type SystemFontFamily, type TextStyle } from './textFormatting'
+import { fontFamilies, fontVariant, isSystemFont, type FontFamily, type SystemFontAvailability, type TextStyle } from './textFormatting'
+
+const selectableFonts = (Object.keys(fontFamilies) as FontFamily[]).filter(family => !isSystemFont(family))
 
 const toggles = [
   { key: 'bold', label: 'Bold', icon: 'bold' },
@@ -30,24 +32,14 @@ interface Props {
   size: number
   maxSize: number
   systemFonts: SystemFontAvailability
-  unavailableFontLabel: (family: SystemFontFamily) => string
   onStyleChange: (fields: Partial<TextStyle>) => void
   onSizeChange: (size: number) => void
 }
 
-export default function TextFormattingControls({ style, size, maxSize, systemFonts, unavailableFontLabel, onStyleChange, onSizeChange }: Props) {
+export default function TextFormattingControls({ style, size, maxSize, systemFonts, onStyleChange, onSizeChange }: Props) {
   const [sizeInput, setSizeInput] = useState<string | null>(null)
-  const variants = isSystemFont(style.fontFamily) ? systemFonts[style.fontFamily] ?? [] : null
-  const chooseFamily = (fontFamily: FontFamily) => {
-    if (!isSystemFont(fontFamily)) {
-      onStyleChange({ fontFamily })
-      return
-    }
-    const available = systemFonts[fontFamily] ?? []
-    const current = fontVariant(style)
-    const variant = [current, current & 1, current & 2, ...available].find(face => available.includes(face))
-    if (variant !== undefined) onStyleChange({ fontFamily, bold: !!(variant & 1), italic: !!(variant & 2) })
-  }
+  const savedFont = isSystemFont(style.fontFamily) ? style.fontFamily : null
+  const variants = savedFont ? systemFonts[savedFont] ?? [] : null
   const fieldStyle = {
     height: 30, px: 1, fontSize: 13, color: 'text.primary', bgcolor: 'background.paper',
     border: 1, borderColor: 'divider', borderRadius: 0.5
@@ -58,18 +50,15 @@ export default function TextFormattingControls({ style, size, maxSize, systemFon
         component='select'
         aria-label='Font family'
         title='Font family'
-        value={style.fontFamily ?? 'sans'}
-        onChange={event => chooseFamily(event.target.value as FontFamily)}
+        value={savedFont ? '' : style.fontFamily ?? 'sans'}
+        onChange={event => {
+          const fontFamily = selectableFonts.find(family => family === event.target.value)
+          if (fontFamily) onStyleChange({ fontFamily })
+        }}
         sx={{ ...fieldStyle, maxWidth: 180 }}
       >
-        {(Object.keys(fontFamilies) as FontFamily[]).map(value => {
-          const reason = isSystemFont(value) && !systemFonts[value]?.length ? unavailableFontLabel(value) : ''
-          return (
-            <option key={value} value={value} disabled={!!reason}>
-              {fontFamilies[value].label}{reason && ` (${reason})`}
-            </option>
-          )
-        })}
+        {savedFont && <option value='' disabled>Previously saved font</option>}
+        {selectableFonts.map(family => <option key={family} value={family}>{fontFamilies[family].label}</option>)}
       </Box>
       <Box
         component='input'

@@ -59,16 +59,18 @@ export default function FitPagePreview({ previewUrl, pageNumber, visualDeskew = 
   } | null>(null)
   const stampFontSize = resizePreview?.fontSize ?? stamp?.fontSize ?? 10
   const stampStyle = stamp?.style ?? defaultStampStyle
+  const hasSavedIndexFont = isSystemFont(stampStyle.fontFamily)
   const localFonts = useQuery({
     queryKey: ['MERGE_PDF', 'local-system-fonts'],
     queryFn: loadLocalSystemFonts,
+    enabled: hasSavedIndexFont || annotations.some(item => item.kind === 'remark' && isSystemFont(item.fontFamily)),
     staleTime: Infinity,
     gcTime: Infinity
   })
   const serverFonts = useQuery({
     queryKey: ['MERGE_PDF', 'server-system-fonts'],
     queryFn: MergePdfServices.systemIndexFonts,
-    enabled: !!stamp,
+    enabled: hasSavedIndexFont,
     staleTime: 60_000,
     retry: false,
     meta: { suppressErrorToast: true }
@@ -367,12 +369,6 @@ export default function FitPagePreview({ previewUrl, pageNumber, visualDeskew = 
               size={stampFontSize}
               maxSize={48}
               systemFonts={indexSystemFonts}
-              unavailableFontLabel={family => {
-                if (serverFonts.isError) return 'Server check failed'
-                if (!serverFonts.isSuccess) return 'Checking server'
-                if (!serverFonts.data.some(font => font.family === family && font.variants.length)) return 'Unavailable on server'
-                return localFonts.isPending ? 'Checking device' : 'No matching font on this device'
-              }}
               onStyleChange={onStampStyleChange}
               onSizeChange={onStampSizeChange}
             />
@@ -388,7 +384,6 @@ export default function FitPagePreview({ previewUrl, pageNumber, visualDeskew = 
                 size={selected.fontSize ?? 12}
                 maxSize={72}
                 systemFonts={localFonts.data ?? {}}
-                unavailableFontLabel={() => localFonts.isPending ? 'Checking device' : 'Unavailable on this device'}
                 onStyleChange={fields => updateSelected({ ...selected, ...fields })}
                 onSizeChange={fontSize => updateSelected({ ...selected, fontSize })}
               />
