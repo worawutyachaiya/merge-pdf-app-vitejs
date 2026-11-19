@@ -10,7 +10,6 @@ import {
   type DragEndEvent
 } from '@dnd-kit/core'
 import { SortableContext, rectSortingStrategy, sortableKeyboardCoordinates } from '@dnd-kit/sortable'
-import { zodResolver } from '@hookform/resolvers/zod'
 import { AxiosError, type AxiosResponse } from 'axios'
 import type { ResultDataResponseI } from '@/libs/axios/types/AxiosResponseInterface'
 import {
@@ -20,6 +19,7 @@ import {
   Card,
   CardContent,
   CardHeader,
+  Checkbox,
   CircularProgress,
   Chip,
   IconButton,
@@ -28,6 +28,7 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
+  FormControlLabel,
   Grid,
   GlobalStyles,
   Tab,
@@ -35,22 +36,20 @@ import {
   Tabs,
   Typography
 } from '@mui/material'
-import { useForm } from 'react-hook-form'
 import { useDropzone } from 'react-dropzone'
 
 import DxBreadCrumbs from '@/_template/DxBreadCrumbs'
 import {
   useMergePdfActions,
   useMergePdfDetail,
-  useMergePdfNextCode,
   useMergePdfPagePreview
 } from '@/_workspace/react-query/hooks/useMergePdf'
+import { useDocumentOrder } from '@/_workspace/react-query/hooks/useSettings'
 import MergePdfServices from '@/_workspace/services/merge-pdf/MergePdfServices'
 import SettingsServices from '@/_workspace/services/settings/SettingsServices'
 import {
-  MERGE_PDF_CATEGORIES,
-  REQUIRED_MERGE_PDF_CATEGORY_IDS,
-  type MergePdfDetail
+  type MergePdfDetail,
+  type MergePdfDocument
 } from '@/_workspace/types/merge-pdf/MergePdf'
 import { ToastMessageError, ToastMessageSuccess } from '@/components/ToastMessage'
 import CustomTextField from '@/components/mui/TextField'
@@ -66,7 +65,6 @@ import { jobStampCoordinates } from './stampPlacement'
 import MergePdfList from './MergePdfList'
 import MergePdfPageThumbnail from './MergePdfPageThumbnail'
 import { breadcrumbNavigation, MENU_NAME } from './env'
-import { mergePdfFormDefaults, mergePdfFormSchema, type MergePdfFormValues } from './validationSchema'
 import { categoryRanks, insertPagesByCategory, movePagesToPosition, sortPagesByCategory } from './pageOrder'
 import { useObjectUrl } from './useObjectUrl'
 import { updateDraftPages, reorderDraftPages, base64Pdf } from './editorDraft'
@@ -92,15 +90,28 @@ const loadCategoryRanks = async () => {
   const response = await SettingsServices.documentOrder()
   if (!response.data.Status || !response.data.ResultOnDb.length)
     throw new Error(response.data.Message || 'Unable to load document order')
-  return categoryRanks(response.data.ResultOnDb)
+  return categoryRanks(response.data.ResultOnDb.filter(category => category.IS_ENABLED === 1))
 }
 
-type Confirmation =
-  | { kind: 'complete' }
-  | { kind: 'document'; id: number }
-  | { kind: 'page'; id: number }
-  | { kind: 'pages'; ids: number[] }
-  | null
+type Confirmation = { kind: 'complete' } | { kind: 'document'; id: number } | null
+
+const standardImportTypes = [1, 2, 4, 9]
+
+const EntryStatusCheckbox = ({ source, disabled, onToggle, confirmLabel = 'Confirm Status 04' }: {
+  source?: MergePdfDocument
+  disabled: boolean
+  onToggle: () => void
+  confirmLabel?: string
+}) => {
+  const checked = source?.ENTRY_STATUS_CODE === '04'
+  return (
+    <FormControlLabel
+      label={checked ? 'Confirmed Status 04' : confirmLabel}
+      sx={{ m: 0, whiteSpace: 'nowrap' }}
+      control={<Checkbox size='small' color='success' checked={checked} disabled={disabled} onChange={onToggle} />}
+    />
+  )
+}
 
 interface ImportFile {
   id: number
@@ -109,14 +120,15 @@ interface ImportFile {
   isDetecting: boolean
   typeSelected: boolean
   description: string
-  hasOtherPages?: boolean
 }
-
-const isOtherImport = (file: ImportFile, mode: 'manual' | 'combined') =>
-  mode === 'manual' ? file.categoryId === 10 && (!file.isDetecting || file.typeSelected) : file.hasOtherPages === true
 
 const MergePdfPage = () => {
   const [selectedJobId, setSelectedJobId] = useState<number | null>(null)
+  const categoryQuery = useDocumentOrder()
+  const categories = categoryQuery.data?.data.Status ? categoryQuery.data.data.ResultOnDb : undefined
+  const enabledCategories = categories?.filter(category => category.IS_ENABLED === 1) ?? []
+  const categoryNames = new Map(categories?.map(category => [category.CATEGORY_ID, category.CATEGORY_NAME]))
+  const categoryPositions = categoryRanks(categories ?? [])
   const [editorMode, setEditorMode] = useState<'Add' | 'Edit' | null>(null)
   const [refreshVersion, setRefreshVersion] = useState(0)
   const [selectedPageId, setSelectedPageId] = useState<number | null>(null)
@@ -126,12 +138,9 @@ const MergePdfPage = () => {
   const [confirmAction, setConfirmAction] = useState<Confirmation>(null)
   const [previewOpen, setPreviewOpen] = useState(false)
   const [deskewInput, setDeskewInput] = useState('0')
-  const [statusEditId, setStatusEditId] = useState<number | null>(null)
   const [movePosition, setMovePosition] = useState('')
   const [checkedPageIds, setCheckedPageIds] = useState<number[]>([])
   const [batchCategoryId, setBatchCategoryId] = useState<number | null>(null)
-  const [documentMonth, setDocumentMonth] = useState(() => new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Bangkok', year: 'numeric', month: '2-digit' }).format(new Date()))
-  const nextCodeQuery = useMergePdfNextCode(editorMode === 'Add' && selectedJobId === null && !!documentMonth, documentMonth)
   const painted = useRef(false)
   const paintGesture = useRef<{ pointerId: number; startId: number; x: number; y: number; lastX: number; lastY: number } | null>(null)
   const pendingPaintIds = useRef(new Set<number>())
@@ -185,8 +194,6 @@ const MergePdfPage = () => {
   const [bulkPosition, setBulkPosition] = useState('')
   const [jumpPosition, setJumpPosition] = useState('')
   const [draggedPageId, setDraggedPageId] = useState<number | null>(null)
-  const lastSyncedJobId = useRef<number | null>(null)
-  const editorStartVersion = useRef<number | null>(null)
   const listScrollPosition = useRef(0)
   const detailQuery = useMergePdfDetail(selectedJobId)
   const serverActions = useMergePdfActions()
@@ -211,12 +218,6 @@ const MergePdfPage = () => {
   const saveWork = async (mode: 'draft' | 'complete') => {
     const current = draftRef.current ?? detail
     if (!current) throw new Error('Document not loaded')
-    const missingDescription = current.pages.find(page => page.CATEGORY_ID === 10 && !page.DESCRIPTION?.trim())
-    if (missingDescription) {
-      setSelectedPageId(missingDescription.PAGE_ID)
-      setPreviewOpen(true)
-      throw new Error(`Enter a description for Other page ${missingDescription.SORT_ORDER} before saving`)
-    }
     const uploads = current.documents.filter(doc => doc.DOCUMENT_ID < 0)
     const response = await serverActions.saveEditor.mutateAsync({
       jobId: current.job.JOB_ID,
@@ -270,11 +271,6 @@ const MergePdfPage = () => {
       mutateAsync: (input: Parameters<typeof serverActions.batchPages.mutateAsync>[0]) =>
         changeDraft(current => updateDraftPages(current, input.pageIds, input.action))
     },
-    removePage: {
-      ...serverActions.removePage,
-      mutateAsync: (input: Parameters<typeof serverActions.removePage.mutateAsync>[0]) =>
-        changeDraft(current => updateDraftPages(current, [input.pageId], { kind: 'remove' }))
-    },
     remove: {
       ...serverActions.remove,
       mutateAsync: (input: Parameters<typeof serverActions.remove.mutateAsync>[0]) =>
@@ -323,24 +319,6 @@ const MergePdfPage = () => {
       coordinateGetter: sortableKeyboardCoordinates
     })
   )
-  const {
-    handleSubmit,
-    reset,
-    getValues,
-    formState: { isDirty }
-  } = useForm<MergePdfFormValues>({
-    resolver: zodResolver(mergePdfFormSchema),
-    defaultValues: mergePdfFormDefaults
-  })
-
-  useEffect(() => {
-    if (detail && (lastSyncedJobId.current !== detail.job.JOB_ID || !isDirty)) {
-      if (lastSyncedJobId.current !== detail.job.JOB_ID) editorStartVersion.current = detail.job.ROW_VERSION
-      reset({ title: detail.job.JOB_TITLE })
-      lastSyncedJobId.current = detail.job.JOB_ID
-    }
-  }, [detail, isDirty, reset])
-
   const documentsById = useMemo(
     () => new Map(detail?.documents.map(document => [document.DOCUMENT_ID, document]) ?? []),
     [detail?.documents]
@@ -350,7 +328,8 @@ const MergePdfPage = () => {
   )
   const canComplete =
     !!detail?.pages.length &&
-    REQUIRED_MERGE_PDF_CATEGORY_IDS.every(id => detail.pages.some(page => page.CATEGORY_ID === id)) &&
+    !!categories &&
+    enabledCategories.every(category => !category.REQUIRED_FOR_COMPLETE || detail.pages.some(page => page.CATEGORY_ID === category.CATEGORY_ID)) &&
     detail.documents
       .filter(document => importEntryDocumentIds.has(document.DOCUMENT_ID))
       .every(document => document.ENTRY_STATUS_CODE === '04')
@@ -362,7 +341,13 @@ const MergePdfPage = () => {
   const currentPublication = detail?.publications.find(publication => publication.STATUS === 'PUBLISHED')
   const activeCheckedIds = checkedPageIds.filter(id => detail?.pages.some(page => page.PAGE_ID === id))
   const maxBulkPosition = (detail?.pages.length ?? 0) - activeCheckedIds.length + 1
-  const categoryOptions = MERGE_PDF_CATEGORIES.map(category => ({ value: category.id, label: category.name }))
+  const categoryOptions = enabledCategories.map(category => ({ value: category.CATEGORY_ID, label: category.CATEGORY_NAME }))
+  const categoryOption = (id: number) => ({ value: id, label: categoryNames.get(id) ?? `Document type ${id}` })
+  const presetNames = standardImportTypes.map(id => categoryOptions.find(option => option.value === id)?.label)
+  const sourceDocuments = detail?.documents.slice().sort((a, b) =>
+    (categoryPositions.get(a.CATEGORY_ID) ?? Number.MAX_SAFE_INTEGER) -
+    (categoryPositions.get(b.CATEGORY_ID) ?? Number.MAX_SAFE_INTEGER) || a.UPLOAD_ORDER - b.UPLOAD_ORDER
+  ) ?? []
 
   const run = async (action: () => Promise<void>, success?: string) => {
     setBusy(true)
@@ -380,7 +365,6 @@ const MergePdfPage = () => {
     setWorkingDetail(null)
     draftRef.current = null
     setPendingUploads({})
-    setStatusEditId(null)
     setConfirmAction(null)
     setEditorMode(null)
     setSelectedJobId(null)
@@ -389,15 +373,13 @@ const MergePdfPage = () => {
     window.requestAnimationFrame(() => window.scrollTo({ top: listScrollPosition.current }))
   }
 
-  const startEditor = (jobId: number | null) => {
+  const startEditor = (jobId: number, mode: 'Add' | 'Edit' = 'Edit') => {
     setWorkingDetail(null)
     draftRef.current = null
     setPendingUploads({})
     listScrollPosition.current = window.scrollY
-    reset(mergePdfFormDefaults)
-    lastSyncedJobId.current = null
     setSelectedJobId(jobId)
-    setEditorMode(jobId === null ? 'Add' : 'Edit')
+    setEditorMode(mode)
     setSelectedPageId(null)
     setCheckedPageIds([])
     setBatchCategoryId(null)
@@ -410,22 +392,20 @@ const MergePdfPage = () => {
     window.requestAnimationFrame(() => window.scrollTo({ top: 0 }))
   }
 
-  const createDraft = () =>
-    run(async () => {
-      const values = mergePdfFormSchema.parse(getValues())
-      const created = firstDetail(await actions.create.mutateAsync({ title: values.title, reference: null, month: documentMonth }))
-      reset(values)
-      setSelectedJobId(created.job.JOB_ID)
+  const createDraft = (month: string) => {
+    if (busy) return
+    void run(async () => {
+      const created = firstDetail(await actions.create.mutateAsync({ title: '', reference: null, month }))
+      startEditor(created.job.JOB_ID, 'Add')
     }, 'Draft created')
+  }
 
-  const saveDraft = handleSubmit(values =>
+  const saveDraft = () =>
     run(async () => {
       if (!detail) return
       firstDetail(await actions.saveDraft.mutateAsync())
-      reset(values)
       closeEditor()
     }, 'Draft saved')
-  )
 
   const returnToResults = () => {
     if (busy) return
@@ -434,22 +414,11 @@ const MergePdfPage = () => {
 
   const importFiles = () =>
     run(async () => {
-      if (!detail || !files.length || files.some(file => file.isDetecting)) return
-      const requireDescription = (upload: ImportFile) => {
-        window.requestAnimationFrame(() => {
-          const input = document.getElementById(`merge-pdf-import-description-${upload.id}`)
-          input?.focus()
-          input?.scrollIntoView({ block: 'center', behavior: 'smooth' })
-        })
-        throw new Error(`Enter a description for ${upload.file.name} before importing`)
-      }
-      const missingDescription = files.find(file => isOtherImport(file, importMode) && !file.description.trim())
-      if (missingDescription) requireDescription(missingDescription)
+      if (!detail || !categories || !files.length || files.some(file => file.isDetecting)) return
       const ranks = await loadCategoryRanks()
       const preparedFiles: {
         upload: ImportFile
         prepared: Awaited<ReturnType<typeof MergePdfServices.prepareFile>>['data']['ResultOnDb'][number]
-        hasOther: boolean
       }[] = []
       let pageCount = (draftRef.current ?? detail).pages.length
       // Validate the whole batch before inserting any pages into the working document.
@@ -459,19 +428,8 @@ const MergePdfPage = () => {
         if (!response.data.Status || !prepared) throw new Error(response.data.Message)
         pageCount += prepared.pageCount
         if (pageCount > 500) throw new Error('Document exceeds 500 pages')
-        const hasOther = prepared.classifications
-          ? prepared.classifications.some(page => page.categoryId === 10)
-          : upload.categoryId === 10
-        preparedFiles.push({ upload, prepared, hasOther })
+        preparedFiles.push({ upload, prepared })
       }
-      if (importMode === 'combined') {
-        const otherFiles = new Map(preparedFiles.map(item => [item.upload.id, item.hasOther]))
-        setFiles(current =>
-          current.map(file => ({ ...file, hasOtherPages: otherFiles.get(file.id) ?? file.hasOtherPages }))
-        )
-      }
-      const missingPreparedDescription = preparedFiles.find(item => item.hasOther && !item.upload.description.trim())
-      if (missingPreparedDescription) requireDescription(missingPreparedDescription.upload)
       let completed = 0
       try {
         for (const { upload, prepared } of preparedFiles) {
@@ -506,7 +464,7 @@ const MergePdfPage = () => {
                   DOCUMENT_ID: documentId,
                   JOB_ID: current.job.JOB_ID,
                   CATEGORY_ID: documentCategory,
-                  CATEGORY_NAME: MERGE_PDF_CATEGORIES.find(item => item.id === documentCategory)!.name,
+                  CATEGORY_NAME: categoryOption(documentCategory).label,
                   ORIGINAL_FILE_NAME: file.name,
                   SOURCE_TYPE: prepared.sourceType,
                   PDF_PAGE_COUNT: prepared.pageCount,
@@ -657,9 +615,22 @@ const MergePdfPage = () => {
   const removePages = (ids: number[]) => {
     if (!detail || !ids.length) return
     void run(async () => {
-      firstDetail(await actions.batchPages.mutateAsync({ jobId: detail.job.JOB_ID, rowVersion: detail.job.ROW_VERSION, pageIds: ids, action: { kind: 'remove' } }))
+      const updated = firstDetail(
+        await actions.batchPages.mutateAsync({
+          jobId: detail.job.JOB_ID,
+          rowVersion: detail.job.ROW_VERSION,
+          pageIds: ids,
+          action: { kind: 'remove' }
+        })
+      )
       setCheckedPageIds([])
-      if (selectedPageId !== null && ids.includes(selectedPageId)) { setPreviewOpen(false); setSelectedPageId(null) }
+      if (selectedPage && ids.includes(selectedPage.PAGE_ID)) {
+        const removed = new Set(ids)
+        const nextIndex = detail.pages.slice(0, selectedPageIndex).filter(page => !removed.has(page.PAGE_ID)).length
+        const next = updated.pages[Math.min(nextIndex, updated.pages.length - 1)]
+        setSelectedPageId(next?.PAGE_ID ?? null)
+        if (!next) setPreviewOpen(false)
+      }
     })
   }
 
@@ -670,21 +641,7 @@ const MergePdfPage = () => {
         if (confirmAction.kind === 'complete') {
           firstDetail(await actions.complete.mutateAsync())
           closeEditor()
-        } else if (confirmAction.kind === 'pages') {
-          firstDetail(
-            await actions.batchPages.mutateAsync({
-              jobId: detail.job.JOB_ID,
-              rowVersion: detail.job.ROW_VERSION,
-              pageIds: confirmAction.ids,
-              action: { kind: 'remove' }
-            })
-          )
-          setCheckedPageIds([])
-          if (selectedPageId !== null && confirmAction.ids.includes(selectedPageId)) {
-            setPreviewOpen(false)
-            setSelectedPageId(null)
-          }
-        } else if (confirmAction.kind === 'document') {
+        } else {
           firstDetail(
             await actions.remove.mutateAsync({
               jobId: detail.job.JOB_ID,
@@ -692,18 +649,6 @@ const MergePdfPage = () => {
               rowVersion: detail.job.ROW_VERSION
             })
           )
-        } else {
-          firstDetail(
-            await actions.removePage.mutateAsync({
-              jobId: detail.job.JOB_ID,
-              pageId: confirmAction.id,
-              rowVersion: detail.job.ROW_VERSION
-            })
-          )
-          if (selectedPageId === confirmAction.id) {
-            setPreviewOpen(false)
-            setSelectedPageId(null)
-          }
         }
         setConfirmAction(null)
       },
@@ -735,25 +680,24 @@ const MergePdfPage = () => {
       window.setTimeout(() => URL.revokeObjectURL(url), 1000)
     })
 
-  const saveEntryStatus = () =>
+  const saveEntryStatus = (documentId: number) =>
     run(
       async () => {
-        if (!detail || statusEditId === null) return
+        if (!detail) return
         firstDetail(
           await actions.updateEntryStatus.mutateAsync({
             jobId: detail.job.JOB_ID,
-            documentId: statusEditId,
+            documentId,
             rowVersion: detail.job.ROW_VERSION,
             statusCode:
-              detail.documents.find(document => document.DOCUMENT_ID === statusEditId)?.ENTRY_STATUS_CODE === '04'
+              documentsById.get(documentId)?.ENTRY_STATUS_CODE === '04'
                 ? null
                 : '04'
           })
         )
-        setStatusEditId(null)
         setCheckedPageIds([])
       },
-      detail?.documents.find(document => document.DOCUMENT_ID === statusEditId)?.ENTRY_STATUS_CODE === '04'
+      documentsById.get(documentId)?.ENTRY_STATUS_CODE === '04'
         ? 'Status 04 cleared in current edits. Save to apply.'
         : 'Status 04 confirmed in current edits. Save to apply.'
     )
@@ -794,7 +738,7 @@ const MergePdfPage = () => {
             'image/webp': ['.webp'],
             'image/tiff': ['.tif', '.tiff']
           },
-    disabled: busy,
+    disabled: busy || !categories,
     multiple: true,
     onDrop: (acceptedFiles, fileRejections) => {
       if (acceptedFiles.length) {
@@ -831,8 +775,11 @@ const MergePdfPage = () => {
       </Grid>
       <Grid size={12} sx={{ display: editorMode === null ? 'block' : 'none' }}>
         <MergePdfList
-          onOpen={jobId => startEditor(jobId)}
-          onAdd={() => startEditor(null)}
+          onOpen={jobId => {
+            if (!busy) startEditor(jobId)
+          }}
+          onAdd={createDraft}
+          creatingDraft={busy && editorMode === null}
           refreshVersion={refreshVersion}
         />
       </Grid>
@@ -856,7 +803,7 @@ const MergePdfPage = () => {
           <Stack spacing={6}>
             <Card>
               <CardHeader
-                title={detail?.job.JOB_TITLE ?? (editorMode === 'Add' ? 'New document' : 'Loading...')}
+                title={detail?.job.JOB_TITLE ?? 'Loading...'}
                 titleTypographyProps={{ variant: 'h5' }}
                 action={
                   detail && (
@@ -876,29 +823,9 @@ const MergePdfPage = () => {
                       disabled
                       fullWidth
                       slotProps={{ input: { sx: { height: 44 } } }}
-                      value={
-                        detail
-                          ? /^I\d{2}-\d{4,}$/.test(detail.job.JOB_CODE)
-                            ? detail.job.JOB_CODE
-                            : detail.job.JOB_TITLE
-                          : (nextCodeQuery.data?.data.ResultOnDb[0]?.code ??
-                            (nextCodeQuery.isFetching ? 'Loading...' : ''))
-                      }
-                      helperText={
-                        !detail
-                          ? nextCodeQuery.isError
-                            ? 'Could not load the next number'
-                            : 'Number is reserved when the draft is created'
-                          : undefined
-                      }
+                      value={detail ? (/^I\d{2}-\d{4,}$/.test(detail.job.JOB_CODE) ? detail.job.JOB_CODE : detail.job.JOB_TITLE) : ''}
                     />
                   </Grid>
-                  {editorMode === 'Add' && !detail && (
-                    <Grid size={{ xs: 12, md: 3 }}>
-                      <CustomTextField fullWidth type='month' label='Document month' slotProps={{ input: { sx: { height: 44 } } }} value={documentMonth}
-                        onChange={event => setDocumentMonth(event.target.value)} />
-                    </Grid>
-                  )}
                   {currentPublication && (
                     <Grid size={{ xs: 12, md: 5 }} sx={{ alignSelf: 'flex-end' }}>
                       <Button
@@ -925,6 +852,15 @@ const MergePdfPage = () => {
                     titleTypographyProps={{ variant: 'h5' }}
                   />
                   <CardContent>
+                    {!categories && (
+                      <Alert
+                        severity={categoryQuery.isFetching ? 'info' : 'error'}
+                        sx={{ mb: 3 }}
+                        action={!categoryQuery.isFetching && <Button onClick={() => void categoryQuery.refetch()}>Retry</Button>}
+                      >
+                        {categoryQuery.isFetching ? 'Loading document types…' : 'Could not load document types.'}
+                      </Alert>
+                    )}
                     <Tabs
                       value={importMode}
                       aria-label='Import mode'
@@ -998,14 +934,36 @@ const MergePdfPage = () => {
                         <Stack spacing={2}>
                           <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 2 }}>
                             <Typography variant='subtitle2'>Files to import ({files.length})</Typography>
-                            {!busy && (
-                              <Button size='small' color='inherit' onClick={() => setFiles([])}>
+                            <Stack direction='row' spacing={1} flexWrap='wrap'>
+                              {importMode === 'manual' && presetNames.slice(0, files.length).some(Boolean) && (
+                                <Tooltip title={presetNames.filter(Boolean).join(', ')}>
+                                  <span>
+                                    <Button
+                                      size='small'
+                                      disabled={busy}
+                                      onClick={() =>
+                                        setFiles(current =>
+                                          current.map((file, index) =>
+                                            presetNames[index]
+                                              ? { ...file, categoryId: standardImportTypes[index], typeSelected: true, isDetecting: false }
+                                              : file
+                                          )
+                                        )
+                                      }
+                                    >
+                                      Set first 4 types
+                                    </Button>
+                                  </span>
+                                </Tooltip>
+                              )}
+                              <Button size='small' color='inherit' disabled={busy} onClick={() => setFiles([])}>
                                 Clear all
                               </Button>
-                            )}
+                            </Stack>
                           </Box>
                           {files.map(upload => {
-                            const showDescription = isOtherImport(upload, importMode)
+                            const showDescription = importMode === 'combined' ||
+                              (upload.categoryId === 10 && (!upload.isDetecting || upload.typeSelected))
                             const extension = upload.file.name.split('.').pop()?.toUpperCase() ?? 'FILE'
                             const fileSize =
                               upload.file.size < 1024
@@ -1096,10 +1054,11 @@ const MergePdfPage = () => {
                                     <Grid size={{ xs: 10, sm: 4 }}>
                                       <CustomTextField
                                         id={`merge-pdf-import-description-${upload.id}`}
-                                        label='Description'
-                                        required
+                                        label='Description (optional)'
                                         fullWidth
-                                        placeholder='Describe this Other document'
+                                        placeholder={importMode === 'combined'
+                                          ? `Applies to ${categoryOption(10).label} pages`
+                                          : `Describe this ${categoryOption(10).label} document`}
                                         value={upload.description}
                                         disabled={busy}
                                         inputProps={{ maxLength: 1000 }}
@@ -1136,12 +1095,7 @@ const MergePdfPage = () => {
                         <Button
                           variant='contained'
                           color='primary'
-                          disabled={
-                            busy ||
-                            files.length === 0 ||
-                            files.some(file => file.isDetecting) ||
-                            files.some(file => isOtherImport(file, importMode) && !file.description.trim())
-                          }
+                          disabled={busy || !categories || !files.length || files.some(file => file.isDetecting)}
                           onClick={() => void importFiles()}
                         >
                           {busy ? 'Importing ...' : 'Import'}
@@ -1160,7 +1114,7 @@ const MergePdfPage = () => {
                         variant='outlined'
                         color='primary'
                         size='small'
-                        disabled={busy || detail.pages.length < 2}
+                        disabled={busy || !categories || detail.pages.length < 2}
                         onClick={sortByCategory}
                       >
                         Sort by document type
@@ -1396,6 +1350,9 @@ const MergePdfPage = () => {
                               }}
                               onRotate={delta => void rotatePage(page.PAGE_ID, delta)}
                               onRemove={() => removePages([page.PAGE_ID])}
+                              onCategoryChange={categoryId => void changePageCategory(page.PAGE_ID, categoryId)}
+                              categoryOptions={categoryOptions}
+                              categoryValue={categoryOption(page.CATEGORY_ID)}
                             />
                           ))}
                         </Box>
@@ -1427,13 +1384,13 @@ const MergePdfPage = () => {
                   <CardHeader title='Source documents' titleTypographyProps={{ variant: 'h5' }} />
                   <CardContent>
                     <Stack spacing={2}>
-                      {detail.documents.map(document => (
+                      {sourceDocuments.map(document => (
                         <Box
                           key={document.DOCUMENT_ID}
                           sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap' }}
                         >
                           <Typography sx={{ flex: 1, minWidth: 200, overflowWrap: 'anywhere' }}>
-                            {document.CATEGORY_ID === 10 ? 'Other / mixed file' : document.CATEGORY_NAME}:{' '}
+                            {categoryNames.get(document.CATEGORY_ID) ?? document.CATEGORY_NAME}:{' '}
                             <Button
                               disabled={busy}
                               onClick={() => void downloadSource(document.DOCUMENT_ID, document.ORIGINAL_FILE_NAME)}
@@ -1471,15 +1428,11 @@ const MergePdfPage = () => {
                             )}
                           </Typography>
                           {importEntryDocumentIds.has(document.DOCUMENT_ID) && (
-                            <Button
-                              size='small'
+                            <EntryStatusCheckbox
+                              source={document}
                               disabled={busy}
-                              onClick={() => {
-                                setStatusEditId(document.DOCUMENT_ID)
-                              }}
-                            >
-                              {document.ENTRY_STATUS_CODE === '04' ? 'Confirmed Status 04' : 'Confirm Status 04'}
-                            </Button>
+                              onToggle={() => void saveEntryStatus(document.DOCUMENT_ID)}
+                            />
                           )}
                           <Button
                             color='error'
@@ -1516,7 +1469,7 @@ const MergePdfPage = () => {
               gap: 2
             }}
           >
-            {detail ? (
+            {detail && (
               <>
                 <Typography variant='body2' sx={{ mr: 'auto' }}>
                   {detail.pages.length} pages ·{' '}
@@ -1536,17 +1489,6 @@ const MergePdfPage = () => {
                   {hasCompleted ? 'Save Changes' : 'Save & Complete'}
                 </Button>
               </>
-            ) : (
-              editorMode === 'Add' && (
-                <Button
-                  variant='contained'
-                  color='success'
-                  disabled={busy || !/^\d{4}-(0[1-9]|1[0-2])$/.test(documentMonth) || nextCodeQuery.isFetching || nextCodeQuery.isError}
-                  onClick={handleSubmit(() => void createDraft())}
-                >
-                  Create Draft &amp; Continue
-                </Button>
-              )
             )}
             <Button
               variant='tonal'
@@ -1626,7 +1568,18 @@ const MergePdfPage = () => {
                     }}
                     visualDeskew={deskewInput.trim() !== '' && Number.isFinite(Number(deskewInput)) && Math.abs(Number(deskewInput)) <= 15
                       ? Number(deskewInput) - (selectedPage.DESKEW_DEGREES ?? 0) : 0}
-                    stamp={selectedPageIndex === 0 ? { name: detail.job.JOB_CODE, coordinates: jobStampCoordinates(detail.job), fontSize: detail.job.STAMP_FONT_SIZE ?? 10 } : undefined}
+                    stamp={selectedPageIndex === 0 ? {
+                      name: detail.job.JOB_CODE,
+                      coordinates: jobStampCoordinates(detail.job),
+                      fontSize: detail.job.STAMP_FONT_SIZE ?? 10,
+                      style: detail.job.STAMP_STYLE ?? undefined
+                    } : undefined}
+                    onStampStyleChange={busy ? undefined : fields => {
+                      void changeDraft(current => ({
+                        ...current,
+                        job: { ...current.job, STAMP_STYLE: { ...current.job.STAMP_STYLE, ...fields } }
+                      }))
+                    }}
                     onStampSizeChange={busy ? undefined : (fontSize, coordinates) => {
                       void changeDraft(current => ({ ...current, job: {
                         ...current.job, STAMP_FONT_SIZE: fontSize,
@@ -1673,38 +1626,18 @@ const MergePdfPage = () => {
                       Move
                     </Button>
                   </Box>
-                  <SelectCustom
-                    inputId='merge-pdf-page-type'
-                    name='pageType'
-                    label='Page document type'
-                    placeholder='Select ...'
-                    classNamePrefix='select'
-                    options={categoryOptions}
-                    value={
-                      selectedPage.CLASSIFICATION_SOURCE === 'UNKNOWN'
-                        ? null
-                        : categoryOptions.find(option => option.value === selectedPage.CATEGORY_ID)
-                    }
-                    isDisabled={busy}
-                    onChange={option => {
-                      if (option) void changePageCategory(selectedPage.PAGE_ID, option.value)
-                    }}
-                  />
                   <Typography variant='body2' color='text.secondary'>
                     Source page {selectedPage.SOURCE_PAGE_NUMBER} · Rotation {selectedPage.ROTATION_DEGREES}°
                   </Typography>
                   {selectedPage.CATEGORY_ID === 10 && (
                     <CustomTextField
-                      label='Page description'
+                      label='Page description (optional)'
                       fullWidth
                       multiline
                       minRows={3}
                       maxRows={6}
                       value={selectedPage.DESCRIPTION ?? ''}
                       disabled={busy}
-                      required={selectedPage.CATEGORY_ID === 10}
-                      error={selectedPage.CATEGORY_ID === 10 && !selectedPage.DESCRIPTION?.trim()}
-                      helperText={selectedPage.CATEGORY_ID === 10 ? 'Required for Other pages' : undefined}
                       inputProps={{ maxLength: 1000 }}
                       onChange={event => {
                         const value = event.target.value
@@ -1781,54 +1714,70 @@ const MergePdfPage = () => {
                   </Stack>
                     </Stack>
                   </Box>
-                  <Stack direction='row' spacing={2}>
                   {selectedPage.CATEGORY_ID === 1 && (
-                    <Button
-                      variant='contained'
-                      sx={{ flex: 1, minHeight: 40, minWidth: 0, whiteSpace: 'normal' }}
+                    <EntryStatusCheckbox
+                      source={documentsById.get(selectedPage.DOCUMENT_ID)}
                       disabled={busy}
-                      onClick={() => {
-                        setStatusEditId(selectedPage.DOCUMENT_ID)
-                      }}
-                    >
-                      {documentsById.get(selectedPage.DOCUMENT_ID)?.ENTRY_STATUS_CODE === '04'
-                        ? 'Confirmed Status 04'
-                        : 'Confirm status 04'}
-                    </Button>
+                      onToggle={() => void saveEntryStatus(selectedPage.DOCUMENT_ID)}
+                      confirmLabel='Confirm status 04'
+                    />
                   )}
+                  <SelectCustom
+                    inputId='merge-pdf-page-type'
+                    name='merge-pdf-page-type'
+                    label='Page document type'
+                    placeholder='Select ...'
+                    classNamePrefix='select'
+                    menuPlacement='auto'
+                    options={categoryOptions}
+                    value={
+                      selectedPage.CLASSIFICATION_SOURCE === 'UNKNOWN'
+                        ? null
+                        : categoryOption(selectedPage.CATEGORY_ID)
+                    }
+                    isDisabled={busy || !categories}
+                    onChange={option => {
+                      if (option) void changePageCategory(selectedPage.PAGE_ID, option.value)
+                    }}
+                  />
                   <Button
                     variant='tonal'
-                    sx={{ flex: 1, minHeight: 40, minWidth: 0, whiteSpace: 'normal' }}
+                    sx={{ minHeight: 40 }}
                     color='error'
                     disabled={busy}
                     onClick={() => removePages([selectedPage.PAGE_ID])}
                   >
                     Remove this page
                   </Button>
-                  </Stack>
-                  <Stack direction='row' spacing={2}>
-          <Button
-            variant='contained'
-            color='primary'
-            fullWidth
-            disabled={busy || selectedPageIndex <= 0}
-            onClick={() => {
-              setSelectedPageId(detail?.pages[selectedPageIndex - 1]?.PAGE_ID ?? null)
-            }}
-          >
-            Previous
-          </Button>
-          <Button
-            variant='contained'
-            color='primary'
-            fullWidth
-            disabled={busy || !detail || selectedPageIndex >= detail.pages.length - 1}
-            onClick={() => {
-              setSelectedPageId(detail?.pages[selectedPageIndex + 1]?.PAGE_ID ?? null)
-            }}
-          >
-            Next
-          </Button>
+                  <Stack direction='row' spacing={1} alignItems='center' aria-label='Page navigation'>
+                    <Tooltip title='First page'>
+                      <span><IconButton color='primary' aria-label='First page' disabled={busy || selectedPageIndex <= 0}
+                        onClick={() => setSelectedPageId(detail.pages[0].PAGE_ID)}>
+                        <i className='tabler-chevrons-left' />
+                      </IconButton></span>
+                    </Tooltip>
+                    <Button
+                      variant='contained'
+                      fullWidth
+                      disabled={busy || selectedPageIndex <= 0}
+                      onClick={() => setSelectedPageId(detail.pages[selectedPageIndex - 1].PAGE_ID)}
+                    >
+                      Previous
+                    </Button>
+                    <Button
+                      variant='contained'
+                      fullWidth
+                      disabled={busy || selectedPageIndex >= detail.pages.length - 1}
+                      onClick={() => setSelectedPageId(detail.pages[selectedPageIndex + 1].PAGE_ID)}
+                    >
+                      Next
+                    </Button>
+                    <Tooltip title='Last page'>
+                      <span><IconButton color='primary' aria-label='Last page' disabled={busy || selectedPageIndex >= detail.pages.length - 1}
+                        onClick={() => setSelectedPageId(detail.pages[detail.pages.length - 1].PAGE_ID)}>
+                        <i className='tabler-chevrons-right' />
+                      </IconButton></span>
+                    </Tooltip>
                   </Stack>
                 </Stack>
               </Grid>
@@ -1837,7 +1786,7 @@ const MergePdfPage = () => {
         </DialogContent>
         <DialogActions>
           <Button variant='tonal' color='secondary' disabled={busy} onClick={() => setPreviewOpen(false)}>
-            Close
+            Save and Close
           </Button>
         </DialogActions>
       </Dialog>
@@ -1848,47 +1797,9 @@ const MergePdfPage = () => {
         isLoading={busy}
         isDelete={confirmAction?.kind !== 'complete'}
         confirmDisabled={confirmAction?.kind === 'complete' && !canComplete}
-        title={
-          confirmAction?.kind === 'complete'
-            ? hasCompleted
-              ? 'Save Changes'
-              : 'Save & Complete'
-            : confirmAction?.kind === 'pages'
-              ? `Remove ${confirmAction.ids.length} selected pages`
-              : confirmAction?.kind === 'page'
-                ? 'Remove page'
-                : 'Remove document'
-        }
-        // description={
-        //   confirmAction?.kind === 'complete'
-        //     ? hasCompleted
-        //       ? `Save changes to ${currentPublication?.OUTPUT_FILE_NAME ?? detail?.job.JOB_CODE} at the same shared path?`
-        //       : 'Merge the pages in this order and save the PDF to the shared folder?'
-        //     : confirmAction?.kind === 'pages'
-        //       ? `Remove all ${confirmAction.ids.length} selected pages from this document?`
-        //       : confirmAction?.kind === 'page'
-        //         ? 'Remove this page from this document?'
-        //         : 'Remove this source document and all of its pages?'
-        // }
+        title={confirmAction?.kind === 'complete' ? (hasCompleted ? 'Save Changes' : 'Save & Complete') : 'Remove document'}
         confirmLabel={
           confirmAction?.kind === 'complete' ? (hasCompleted ? 'Save Changes' : 'Save & Complete') : 'Remove'
-        }
-      />
-      <ConfirmModal
-        show={statusEditId !== null}
-        onConfirmClick={() => void saveEntryStatus()}
-        onCloseClick={() => setStatusEditId(null)}
-        isLoading={busy}
-        title={
-          documentsById.get(statusEditId ?? 0)?.ENTRY_STATUS_CODE === '04' ? 'Confirmed Status 04' : 'Confirm Status 04'
-        }
-        description={
-          documentsById.get(statusEditId ?? 0)?.ENTRY_STATUS_CODE === '04'
-            ? 'Status 04 is confirmed for this source document. Do you want to remove the confirmation?'
-            : 'Have you checked the source document and confirmed that the Import entry status is 04?'
-        }
-        confirmLabel={
-          documentsById.get(statusEditId ?? 0)?.ENTRY_STATUS_CODE === '04' ? 'Remove confirmation' : 'Confirm Status 04'
         }
       />
     </Grid>

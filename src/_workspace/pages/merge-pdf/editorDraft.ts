@@ -1,4 +1,5 @@
 import type { BatchPageAction, MergePdfDetail } from '@/_workspace/types/merge-pdf/MergePdf'
+import { rotatePageCovers } from './pageAnnotations'
 
 export const updateDraftPages = (detail: MergePdfDetail, ids: number[], action: BatchPageAction): MergePdfDetail => {
   const selected = new Set(ids)
@@ -19,7 +20,11 @@ export const updateDraftPages = (detail: MergePdfDetail, ids: number[], action: 
                 null
               : null
         }
-      if (action.kind === 'rotate') return { ...page, ROTATION_DEGREES: (page.ROTATION_DEGREES + action.delta) % 360 }
+      if (action.kind === 'rotate') return {
+        ...page,
+        ROTATION_DEGREES: (page.ROTATION_DEGREES + action.delta) % 360,
+        EDITOR_ANNOTATIONS: page.EDITOR_ANNOTATIONS && rotatePageCovers(page.EDITOR_ANNOTATIONS, action.delta)
+      }
       return page
     })
     .map((page, index) => ({ ...page, SORT_ORDER: index + 1 }))

@@ -1,11 +1,24 @@
 ﻿import { useEffect, useMemo, useRef, useState } from 'react'
 import { Alert, Box, Button, CircularProgress, GlobalStyles, IconButton, Stack, Tooltip, Typography } from '@mui/material'
+import { useQuery } from '@tanstack/react-query'
 import { getDocument, GlobalWorkerOptions, type PDFPageProxy } from 'pdfjs-dist'
 import workerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
-import { jobStampCoordinates, resizeStamp, stampFromPointer, type StampCoordinates } from './stampPlacement'
+import {
+  jobStampCoordinates,
+  indexFont,
+  indexTextWidth,
+  resizeStamp,
+  stampVerticalMetrics,
+  stampCoordinatesAtOffset,
+  stampOffset,
+  type StampCoordinates
+} from './stampPlacement'
 import PageAnnotationLayer from './PageAnnotationLayer'
-import { annotationId, loadEStampImage, type PageAnnotation } from './pageAnnotations'
+import TextFormattingControls, { AnnotationColor } from './TextFormattingControls'
+import { annotationId, annotationLabels, loadEStampImage, type PageAnnotation } from './pageAnnotations'
+import { fontVariant, isSystemFont, loadLocalSystemFonts, usesCustomFont, type SystemFontAvailability, type TextStyle } from './textFormatting'
 import MergePdfServices from '@/_workspace/services/merge-pdf/MergePdfServices'
+import './pdfEditorFonts.css'
 
 GlobalWorkerOptions.workerSrc = workerUrl
 
@@ -14,21 +27,27 @@ GlobalWorkerOptions.workerSrc = workerUrl
 const previewCursor = `url("data:image/svg+xml,${encodeURIComponent(
   '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="28" viewBox="0 0 24 28"><path d="M3 2v21l5-5 4 8 4-2-4-8h8Z" fill="black" stroke="white" stroke-width="2" stroke-linejoin="round"/></svg>'
 )}") 3 2, default`
+const clampZoom = (value: number) => Math.max(0.1, Math.min(5, value))
+const defaultStampStyle: TextStyle = {}
+
 interface Props {
   previewUrl: string
   pageNumber: number
   visualDeskew?: number
-  stamp?: { name: string; coordinates?: StampCoordinates; fontSize?: number }
+  stamp?: { name: string; coordinates?: StampCoordinates; fontSize?: number; style?: TextStyle }
   onStampMove?: (coordinates: StampCoordinates) => void
   onStampSizeChange?: (fontSize: number, coordinates?: StampCoordinates) => void
+  onStampStyleChange?: (fields: Partial<TextStyle>) => void
   annotations?: PageAnnotation[]
   onAnnotationsChange?: (items: PageAnnotation[]) => void
   onAnnotationBusyChange?: (busy: boolean) => void
 }
 
-export default function FitPagePreview({ previewUrl, pageNumber, visualDeskew = 0, stamp, onStampMove, onStampSizeChange, annotations = [], onAnnotationsChange, onAnnotationBusyChange }: Props) {
+export default function FitPagePreview({ previewUrl, pageNumber, visualDeskew = 0, stamp, onStampMove, onStampSizeChange, onStampStyleChange, annotations = [], onAnnotationsChange, onAnnotationBusyChange }: Props) {
   const imageInput = useRef<HTMLInputElement | null>(null)
   const [selectedAnnotation, setSelectedAnnotation] = useState<string | null>(null)
+  const indexSelected = selectedAnnotation === 'index'
+  const selected = annotations.find(item => item.id === selectedAnnotation)
   const [imageBusy, setImageBusy] = useState(false)
   const [annotationError, setAnnotationError] = useState('')
   const [resizePreview, setResizePreview] = useState<ReturnType<typeof resizeStamp> | null>(null)
@@ -37,9 +56,31 @@ export default function FitPagePreview({ previewUrl, pageNumber, visualDeskew = 
     corner: { x: number; y: number }; preview: ReturnType<typeof resizeStamp>
   } | null>(null)
   const stampFontSize = resizePreview?.fontSize ?? stamp?.fontSize ?? 10
+  const stampStyle = stamp?.style ?? defaultStampStyle
+  const localFonts = useQuery({
+    queryKey: ['MERGE_PDF', 'local-system-fonts'],
+    queryFn: loadLocalSystemFonts,
+    staleTime: Infinity,
+    gcTime: Infinity
+  })
+  const serverFonts = useQuery({
+    queryKey: ['MERGE_PDF', 'server-system-fonts'],
+    queryFn: MergePdfServices.systemIndexFonts,
+    enabled: !!stamp,
+    staleTime: 60_000,
+    retry: false,
+    meta: { suppressErrorToast: true }
+  })
+  const indexSystemFonts = useMemo<SystemFontAvailability>(() => Object.fromEntries(
+    (serverFonts.data ?? []).map(({ family, variants }) => [
+      family, variants.filter(variant => localFonts.data?.[family]?.includes(variant))
+    ])
+  ), [localFonts.data, serverFonts.data])
+  const [indexFontLoad, setIndexFontLoad] = useState<{ font: string; loaded: boolean } | null>(null)
   const canvas = useRef<HTMLCanvasElement | null>(null)
   const viewport = useRef<HTMLDivElement | null>(null)
   const stampSurface = useRef<HTMLDivElement | null>(null)
+  const stampCanvas = useRef<HTMLCanvasElement | null>(null)
   const stampDrag = useRef<{ id: number; offset: { x: number; y: number }; coordinates: StampCoordinates } | null>(null)
   const [dragPosition, setDragPosition] = useState<StampCoordinates | null>(null)
   const pan = useRef<{ id: number; x: number; y: number; left: number; top: number } | null>(null)
@@ -105,6 +146,20 @@ export default function FitPagePreview({ previewUrl, pageNumber, visualDeskew = 
   const scale = zoom ?? fitScale
   const dimensions = natural ? { width: natural.width * scale, height: natural.height * scale } : null
   useEffect(() => {
+    const node = viewport.current
+    if (!node) return
+    const handleWheel = (event: WheelEvent) => {
+      if (!event.ctrlKey) return
+      event.preventDefault()
+      if (!page || !event.deltaY) return
+      const factor = event.deltaY < 0 ? 1.25 : 1 / 1.25
+      setZoom(current => clampZoom((current ?? fitScale) * factor))
+    }
+    node.addEventListener('wheel', handleWheel, { passive: false })
+    return () => node.removeEventListener('wheel', handleWheel)
+  }, [page, fitScale])
+
+  useEffect(() => {
     if (!page || !canvas.current || !size.width || !size.height) return
     const node = canvas.current,
       screen = page.getViewport({ scale })
@@ -132,21 +187,67 @@ export default function FitPagePreview({ previewUrl, pageNumber, visualDeskew = 
   }, [page, scale, size.width, size.height])
   const savedStampCoordinates = stamp?.coordinates ?? jobStampCoordinates({})
   const placedStamp = resizePreview?.coordinates ?? dragPosition ?? savedStampCoordinates
-  const stampTextWidth = useMemo(() => {
-    const context = document.createElement('canvas').getContext('2d')
-    if (!context) return (stamp?.name.length ?? 0) * stampFontSize * 0.556
-    context.font = `${stampFontSize}px Arial`
-    return context.measureText(stamp?.name ?? '').width
-  }, [stamp?.name, stampFontSize])
-  const stampLeft = 18 * scale + placedStamp.x * Math.max(0, (dimensions?.width ?? 0) - (36 + stampTextWidth) * scale)
-  const stampTop = 18 * scale + placedStamp.y * Math.max(0, (dimensions?.height ?? 0) - (36 + stampFontSize) * scale)
-  const zoomTo = (value: number) => setZoom(Math.max(0.1, Math.min(5, value)))
+  const stampName = stamp?.name ?? ''
+  const customFont = usesCustomFont(stampStyle) ? indexFont(stampStyle, 16) : null
+  const systemFamily = isSystemFont(stampStyle.fontFamily) ? stampStyle.fontFamily : null
+  const systemVariant = fontVariant(stampStyle)
+  const canLoadIndexFont = !systemFamily || !!localFonts.data?.[systemFamily]?.includes(systemVariant)
+  const hasLoadedIndexFont = canLoadIndexFont && (!customFont || (indexFontLoad?.font === customFont && indexFontLoad.loaded))
+  useEffect(() => {
+    if (!customFont || !canLoadIndexFont) return
+    let active = true
+    void document.fonts.load(customFont, stampName).then(faces => {
+      if (active) setIndexFontLoad({ font: customFont, loaded: faces.length > 0 })
+    }).catch(() => {
+      if (active) setIndexFontLoad({ font: customFont, loaded: false })
+    })
+    return () => { active = false }
+  }, [customFont, stampName, canLoadIndexFont])
+  const stampTextWidth = useMemo(
+    () => stampName && hasLoadedIndexFont ? indexTextWidth(stampName, stampFontSize, stampStyle) : 0,
+    [stampName, stampFontSize, stampStyle, hasLoadedIndexFont]
+  )
+  const userUnit = page?.userUnit ?? 1
+  const stampScale = scale * userUnit
+  const stampPage = { width: (natural?.width ?? 0) / userUnit, height: (natural?.height ?? 0) / userUnit }
+  const stampPosition = stampOffset(placedStamp, stampPage, stampTextWidth, stampFontSize, stampStyle)
+  const { baseline, height: stampHeight } = stampVerticalMetrics(stampFontSize, stampStyle)
+  useEffect(() => {
+    const node = stampCanvas.current
+    if (!node || !stampTextWidth) return
+    const density = Math.min(window.devicePixelRatio || 1, 2)
+    node.width = Math.max(1, Math.ceil(stampTextWidth * stampScale * density))
+    node.height = Math.max(1, Math.ceil(stampHeight * stampScale * density))
+    const context = node.getContext('2d')
+    if (!context) return
+    context.font = indexFont(stampStyle, stampFontSize)
+    context.fontKerning = 'none'
+    context.textBaseline = 'alphabetic'
+    const measuredWidth = context.measureText(stampName).width
+    if (!measuredWidth) return
+    context.scale(node.width / measuredWidth, node.height / stampHeight)
+    const thickness = stampFontSize * 0.045
+    context.fillStyle = stampStyle.color ?? '#000000'
+    context.fillText(stampName, 0, baseline)
+    if (stampStyle.underline) context.fillRect(0, baseline + stampFontSize * 0.065 - thickness / 2, measuredWidth, thickness)
+    if (stampStyle.strikethrough) context.fillRect(0, baseline - stampFontSize * 0.28 - thickness / 2, measuredWidth, thickness)
+  }, [page, stampName, stampScale, stampTextWidth, stampFontSize, stampHeight, baseline, stampStyle])
+
+  const zoomTo = (value: number) => setZoom(clampZoom(value))
   const addRemark = () => {
     if (!onAnnotationsChange || annotations.length >= 50) return
     const id = annotationId()
     onAnnotationsChange([...annotations, { id, kind: 'remark', text: '', fontSize: 12, color: '#000000', x: 0.1, y: 0.1, width: 0.35, height: 0.14 }])
     setSelectedAnnotation(id)
   }
+  const addCover = () => {
+    if (!onAnnotationsChange || annotations.length >= 50) return
+    const id = annotationId()
+    onAnnotationsChange([...annotations, { id, kind: 'cover', color: '#ffffff', x: 0.4, y: 0.45, width: 0.2, height: 0.1 }])
+    setSelectedAnnotation(id)
+  }
+  const updateSelected = (item: PageAnnotation) =>
+    onAnnotationsChange?.(annotations.map(current => current.id === item.id ? item : current))
   const prepareTiffStamp = async (file: File): Promise<{ image: string; width: number; height: number }> => {
     if (file.size > 2 * 1024 * 1024) throw new Error('Choose a TIFF image up to 2 MB.')
     const response = await MergePdfServices.prepareEStampImage(file)
@@ -171,10 +272,21 @@ export default function FitPagePreview({ previewUrl, pageNumber, visualDeskew = 
         direction='row'
         alignItems='center'
         justifyContent='space-between'
-        sx={{ p: 1.5, borderBottom: 1, borderColor: 'divider', bgcolor: 'background.paper' }}
+        sx={{ p: 1.5, gap: 1, flexShrink: 0, overflowX: 'auto', borderBottom: 1, borderColor: 'divider', bgcolor: 'background.paper' }}
       >
-        <Stack direction='row' spacing={1} alignItems='center'>
+        <Stack direction='row' spacing={1} alignItems='center' sx={{ flexShrink: 0 }}>
           <Typography variant='body2'>Page {pageNumber}</Typography>
+          {stamp && (
+            <Button
+              size='small'
+              variant={indexSelected ? 'tonal' : 'text'}
+              aria-pressed={indexSelected}
+              disabled={!page || !onStampStyleChange}
+              onClick={() => setSelectedAnnotation(current => current === 'index' ? null : 'index')}
+            >
+              Index
+            </Button>
+          )}
           {onAnnotationsChange && (
             <>
               <Tooltip title='Add a remark visible only in the editor'>
@@ -186,6 +298,10 @@ export default function FitPagePreview({ previewUrl, pageNumber, visualDeskew = 
                   startIcon={<i className='tabler-photo-plus' />} onClick={() => imageInput.current?.click()}>
                   {imageBusy ? 'Loading…' : 'E-stamp'}
                 </Button></span>
+              </Tooltip>
+              <Tooltip title='Cover part of the saved PDF'>
+                <span><Button size='small' disabled={!page || imageBusy || annotations.length >= 50}
+                  startIcon={<i className='tabler-square' />} onClick={addCover}>Cover rectangle</Button></span>
               </Tooltip>
               <input ref={imageInput} type='file' accept='image/png,image/jpeg,image/tiff,image/x-tiff,.tif,.tiff' hidden
                 onChange={async event => {
@@ -213,8 +329,50 @@ export default function FitPagePreview({ previewUrl, pageNumber, visualDeskew = 
             </>
           )}
         </Stack>
-        <Stack direction='row' spacing={1} alignItems='center'>
-          <Tooltip title='Zoom out'>
+        {indexSelected && stamp && onStampStyleChange && onStampSizeChange && (
+          <Stack direction='row' spacing={0.5} alignItems='center' role='group' aria-label='Index formatting'
+            sx={{ flexShrink: 0, pl: 1, borderLeft: 1, borderColor: 'divider' }}>
+            <TextFormattingControls
+              key='index'
+              style={stampStyle}
+              size={stampFontSize}
+              maxSize={48}
+              systemFonts={indexSystemFonts}
+              onStyleChange={onStampStyleChange}
+              onSizeChange={onStampSizeChange}
+            />
+          </Stack>
+        )}
+        {selected && onAnnotationsChange && (
+          <Stack direction='row' spacing={0.5} alignItems='center' role='group' aria-label={`${annotationLabels[selected.kind]} tools`}
+            sx={{ flexShrink: 0, pl: 1, borderLeft: 1, borderColor: 'divider' }}>
+            {selected.kind === 'remark' && (
+              <TextFormattingControls
+                key={selected.id}
+                style={selected}
+                size={selected.fontSize ?? 12}
+                maxSize={72}
+                systemFonts={localFonts.data ?? {}}
+                onStyleChange={fields => updateSelected({ ...selected, ...fields })}
+                onSizeChange={fontSize => updateSelected({ ...selected, fontSize })}
+              />
+            )}
+            {selected.kind === 'cover' && (
+              <AnnotationColor label='Fill color' color={selected.color} onChange={color => updateSelected({ ...selected, color })} />
+            )}
+            <Tooltip title={`Remove ${annotationLabels[selected.kind]}`}>
+              <IconButton size='small' color='error' aria-label={`Remove ${annotationLabels[selected.kind]}`}
+                onClick={() => {
+                  onAnnotationsChange(annotations.filter(item => item.id !== selected.id))
+                  setSelectedAnnotation(null)
+                }}>
+                <i className='tabler-trash' />
+              </IconButton>
+            </Tooltip>
+          </Stack>
+        )}
+        <Stack direction='row' spacing={1} alignItems='center' sx={{ flexShrink: 0, ml: 'auto' }}>
+          <Tooltip title='Zoom out (Ctrl + scroll down)'>
             <span>
               <IconButton
                 size='small'
@@ -229,7 +387,7 @@ export default function FitPagePreview({ previewUrl, pageNumber, visualDeskew = 
           <Typography variant='body2' sx={{ minWidth: 48, textAlign: 'center' }}>
             {Math.round(scale * 100)}%
           </Typography>
-          <Tooltip title='Zoom in'>
+          <Tooltip title='Zoom in (Ctrl + scroll up)'>
             <span>
               <IconButton
                 size='small'
@@ -255,6 +413,15 @@ export default function FitPagePreview({ previewUrl, pageNumber, visualDeskew = 
         </Stack>
       </Stack>
       {annotationError && <Alert severity='error' onClose={() => setAnnotationError('')}>{annotationError}</Alert>}
+      {systemFamily && localFonts.isSuccess && !canLoadIndexFont && (
+        <Alert severity='warning'>The selected index font is unavailable on this device.</Alert>
+      )}
+      {systemFamily && serverFonts.isSuccess && canLoadIndexFont && !indexSystemFonts[systemFamily]?.includes(systemVariant) && (
+        <Alert severity='warning'>The selected index font cannot be embedded on the PDF server.</Alert>
+      )}
+      {canLoadIndexFont && customFont && indexFontLoad?.font === customFont && !indexFontLoad.loaded && (
+        <Alert severity='warning'>Could not load the selected index font in the preview.</Alert>
+      )}
       <Box
         ref={viewport}
         tabIndex={0}
@@ -341,37 +508,41 @@ export default function FitPagePreview({ previewUrl, pageNumber, visualDeskew = 
                 width: dimensions?.width ?? 0,
                 height: dimensions?.height ?? 0,
                 bgcolor: 'common.white',
-                overflow: 'hidden',
                 boxShadow: 3,
                 position: 'relative'
               }}
             >
-              <canvas
-                ref={canvas}
-                aria-label={`Document page ${pageNumber}`}
-                style={{
-                  width: dimensions?.width,
-                  height: dimensions?.height,
-                  display: 'block',
-                  pointerEvents: 'none',
-                  transform: `rotate(${-visualDeskew}deg)`
-                }}
-              />
-              {dimensions && (
-                <PageAnnotationLayer annotations={annotations} width={dimensions.width} height={dimensions.height}
-                  scale={scale} cursor={previewCursor} selectedId={selectedAnnotation} onSelect={setSelectedAnnotation}
-                  onChange={onAnnotationsChange} />
-              )}
-              {stamp && page && (
+              <Box sx={{ position: 'absolute', inset: 0, overflow: 'hidden' }}>
+                <canvas
+                  ref={canvas}
+                  aria-label={`Document page ${pageNumber}`}
+                  style={{
+                    width: dimensions?.width,
+                    height: dimensions?.height,
+                    display: 'block',
+                    pointerEvents: 'none',
+                    transform: `rotate(${-visualDeskew}deg)`
+                  }}
+                />
+                {dimensions && (
+                  <PageAnnotationLayer annotations={annotations} width={dimensions.width} height={dimensions.height}
+                    scale={scale} cursor={previewCursor} selectedId={selectedAnnotation} onSelect={setSelectedAnnotation}
+                    onChange={onAnnotationsChange} />
+                )}
+              </Box>
+              {stamp && page && hasLoadedIndexFont && (
                 <Box
                   role={onStampMove ? 'button' : undefined}
                   tabIndex={onStampMove ? 0 : undefined}
-                  aria-label={onStampMove ? 'Drag document name stamp' : 'Document name stamp preview'}
+                  aria-label={onStampMove ? `Move document name stamp ${stampName}` : `Document name stamp ${stampName}`}
+                  aria-pressed={onStampMove ? indexSelected : undefined}
                   title={onStampMove ? 'Drag to position the document name. Arrow keys also move it.' : undefined}
+                  onFocus={() => setSelectedAnnotation('index')}
                   onPointerDown={event => {
                     if (!onStampMove || event.button !== 0) return
                     event.stopPropagation()
                     event.preventDefault()
+                    setSelectedAnnotation('index')
                     const rect = event.currentTarget.getBoundingClientRect()
                     stampDrag.current = {
                       id: event.pointerId,
@@ -386,13 +557,16 @@ export default function FitPagePreview({ previewUrl, pageNumber, visualDeskew = 
                       surface = stampSurface.current
                     if (!drag || drag.id !== event.pointerId || !surface) return
                     event.stopPropagation()
-                    drag.coordinates = stampFromPointer(
-                      { x: event.clientX, y: event.clientY },
-                      surface.getBoundingClientRect(),
-                      drag.offset,
-                      scale,
+                    const rect = surface.getBoundingClientRect()
+                    drag.coordinates = stampCoordinatesAtOffset(
+                      {
+                        x: (event.clientX - rect.left - drag.offset.x) / stampScale,
+                        y: (event.clientY - rect.top - drag.offset.y) / stampScale
+                      },
+                      stampPage,
                       stampTextWidth,
-                      stampFontSize
+                      stampFontSize,
+                      stampStyle
                     )
                     setDragPosition(drag.coordinates)
                   }}
@@ -416,50 +590,42 @@ export default function FitPagePreview({ previewUrl, pageNumber, visualDeskew = 
                     setDragPosition(null)
                   }}
                   onKeyDown={event => {
-                    if (!onStampMove || !['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(event.key)) return
+                    if (!onStampMove) return
+                    if (event.key === 'Enter' || event.key === ' ') {
+                      event.preventDefault()
+                      setSelectedAnnotation('index')
+                      return
+                    }
+                    if (!['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(event.key)) return
                     event.preventDefault()
                     event.stopPropagation()
                     const step = event.shiftKey ? 0.05 : 0.01
-                    onStampMove({
-                      x: Math.max(
-                        0,
-                        Math.min(
-                          1,
-                          savedStampCoordinates.x +
-                            (event.key === 'ArrowLeft' ? -step : event.key === 'ArrowRight' ? step : 0)
-                        )
-                      ),
-                      y: Math.max(
-                        0,
-                        Math.min(
-                          1,
-                          savedStampCoordinates.y +
-                            (event.key === 'ArrowUp' ? -step : event.key === 'ArrowDown' ? step : 0)
-                        )
-                      )
-                    })
+                    const x = event.key === 'ArrowLeft' ? -step : event.key === 'ArrowRight' ? step : 0
+                    const y = event.key === 'ArrowUp' ? -step : event.key === 'ArrowDown' ? step : 0
+                    onStampMove(stampCoordinatesAtOffset({
+                      x: stampPosition.x + x * stampPage.width,
+                      y: stampPosition.y + y * stampPage.height
+                    }, stampPage, stampTextWidth, stampFontSize, stampStyle))
                   }}
                   sx={{
                     position: 'absolute',
-                    left: stampLeft,
-                    top: stampTop,
-                    color: 'common.black',
-                    whiteSpace: 'nowrap',
+                    left: stampPosition.x * stampScale,
+                    top: stampPosition.y * stampScale,
+                    width: stampTextWidth * stampScale,
+                    height: stampHeight * stampScale,
+                    zIndex: 5,
                     pointerEvents: onStampMove ? 'auto' : 'none',
                     cursor: previewCursor,
                     touchAction: 'none',
                     userSelect: 'none',
-                    fontFamily: 'Arial, sans-serif',
-                    fontSize: stampFontSize * scale,
-                    lineHeight: 1,
-                    outline: onStampMove ? '1px dashed' : 'none',
+                    outline: onStampMove && indexSelected ? '1px dashed' : 'none',
                     outlineColor: 'primary.main',
                     outlineOffset: 3,
                     '&::before': onStampMove ? { content: '""', position: 'absolute', inset: '-8px' } : undefined
                   }}
                 >
-                  {stamp.name}
-                  {onStampSizeChange && onStampMove && [
+                  <canvas ref={stampCanvas} aria-hidden='true' style={{ display: 'block', width: '100%', height: '100%' }} />
+                  {onStampSizeChange && onStampMove && indexSelected && [
                     { x: -1, y: -1, label: 'top left' },
                     { x: 1, y: -1, label: 'top right' },
                     { x: -1, y: 1, label: 'bottom left' },
@@ -484,7 +650,7 @@ export default function FitPagePreview({ previewUrl, pageNumber, visualDeskew = 
                         resizeDrag.current = {
                           id: event.pointerId, x: event.clientX, y: event.clientY,
                           fontSize: stampFontSize, textWidth: stampTextWidth,
-                          left: stampLeft / scale, top: stampTop / scale, corner, preview
+                          left: stampPosition.x, top: stampPosition.y, corner, preview
                         }
                         setResizePreview(preview)
                         event.currentTarget.setPointerCapture(event.pointerId)
@@ -492,11 +658,11 @@ export default function FitPagePreview({ previewUrl, pageNumber, visualDeskew = 
                       onPointerMove={event => {
                         event.stopPropagation()
                         const drag = resizeDrag.current
-                        if (!drag || drag.id !== event.pointerId || !natural) return
+                        if (!drag || drag.id !== event.pointerId) return
                         drag.preview = resizeStamp(
                           drag,
-                          { x: (event.clientX - drag.x) / scale, y: (event.clientY - drag.y) / scale },
-                          drag.corner, natural
+                          { x: (event.clientX - drag.x) / stampScale, y: (event.clientY - drag.y) / stampScale },
+                          drag.corner, stampPage, stampStyle
                         )
                         setResizePreview(drag.preview)
                       }}

@@ -35,6 +35,27 @@ importers:
       '@fontsource-variable/inter':
         specifier: ^5.2.8
         version: 5.2.8
+      '@fontsource/ibm-plex-mono':
+        specifier: 5.3.0
+        version: 5.3.0
+      '@fontsource/inter':
+        specifier: 5.3.0
+        version: 5.3.0
+      '@fontsource/lora':
+        specifier: 5.3.0
+        version: 5.3.0
+      '@fontsource/montserrat':
+        specifier: 5.3.0
+        version: 5.3.0
+      '@fontsource/roboto-condensed':
+        specifier: 5.3.0
+        version: 5.3.0
+      '@fontsource/sarabun':
+        specifier: 5.3.0
+        version: 5.3.0
+      '@fontsource/source-sans-3':
+        specifier: 5.3.1
+        version: 5.3.1
       '@formatjs/intl-localematcher':
         specifier: ^0.8.2
         version: 0.8.2
@@ -824,6 +845,27 @@ packages:
 
   '@fontsource-variable/inter@5.2.8':
     resolution: {integrity: sha512-kOfP2D+ykbcX/P3IFnokOhVRNoTozo5/JxhAIVYLpea/UBmCQ/YWPBfWIDuBImXX/15KH+eKh4xpEUyS2sQQGQ==}
+
+  '@fontsource/ibm-plex-mono@5.3.0':
+    resolution: {integrity: sha512-eTgnZjZEGk1QtD3ZstF+Vclo2HLAni8YMy34/DxllwZvyz1lR/1RF/xTiAquOBO7MvqBx8D2Ig2WCPMVfdZu7Q==}
+
+  '@fontsource/inter@5.3.0':
+    resolution: {integrity: sha512-RofMylZmjlJEfELXeNHFWBRcSs75rGU/6bV2S2jfnvv/3rPXPGe0LgUJTklcHZ9lM4OZmAVFhcJPnACfb91A3g==}
+
+  '@fontsource/lora@5.3.0':
+    resolution: {integrity: sha512-OK1g1z01rHVPqO5aw/FOIoDqc46KKYZdgL3NOLkxLWDk6QhDHhdr/h2BV1cke6gTvR1tzpDfdKyUkGsC+sQLeQ==}
+
+  '@fontsource/montserrat@5.3.0':
+    resolution: {integrity: sha512-iQPDtZOnmM5ih4JBGaMSXisRap0ixb9bAUw2hDtY7EjVfaqiiNlKtVuJl9XclxUwtwMMHNcWXfQR6zI9x05+Tg==}
+
+  '@fontsource/roboto-condensed@5.3.0':
+    resolution: {integrity: sha512-Vbh5pesre/M/Jspd10btdKRqLSTe3yn4l6B2tXHGElCeASfA7Pgdpu1mb8wTG8E72J4Xk6FUfqnSe46UN2QAog==}
+
+  '@fontsource/sarabun@5.3.0':
+    resolution: {integrity: sha512-8GWxnEIG9g/2JlZxU+APaVwipcLMkZkBps9N1tEyBxXWaJEnAtHpuaDYmFVG7lzTgr28orG7//htD/rfxDlfFg==}
+
+  '@fontsource/source-sans-3@5.3.1':
+    resolution: {integrity: sha512-O3YxvbotUOgYI2Zx0bBcEMNjnwitRf9P2+9pd54sMoux1NHrdXnMwZusw2P78lFhEzOPN4glOEQmX0ASaS68uA==}
 
   '@formatjs/fast-memoize@3.1.1':
     resolution: {integrity: sha512-CbNbf+tlJn1baRnPkNePnBqTLxGliG6DDgNa/UtV66abwIjwsliPMOt0172tzxABYzSuxZBZfcp//qI8AvBWPg==}
@@ -6021,6 +6063,20 @@ snapshots:
   '@floating-ui/utils@0.2.11': {}
 
   '@fontsource-variable/inter@5.2.8': {}
+
+  '@fontsource/ibm-plex-mono@5.3.0': {}
+
+  '@fontsource/inter@5.3.0': {}
+
+  '@fontsource/lora@5.3.0': {}
+
+  '@fontsource/montserrat@5.3.0': {}
+
+  '@fontsource/roboto-condensed@5.3.0': {}
+
+  '@fontsource/sarabun@5.3.0': {}
+
+  '@fontsource/source-sans-3@5.3.1': {}
 
   '@formatjs/fast-memoize@3.1.1': {}
 

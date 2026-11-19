@@ -3,16 +3,13 @@ import CancelIcon from '@mui/icons-material/Cancel'
 import RadioButtonUncheckedIcon from '@mui/icons-material/RadioButtonUnchecked'
 import { Box, Tooltip } from '@mui/material'
 
-import { REQUIRED_MERGE_PDF_CATEGORY_IDS } from '@/_workspace/types/merge-pdf/MergePdf'
-
 interface Props {
-  categoryId: number
+  required: boolean
   name: string
   pageCount: number | undefined
 }
 
-const DocumentStatusIndicator = ({ categoryId, name, pageCount }: Props) => {
-  const required = REQUIRED_MERGE_PDF_CATEGORY_IDS.some(id => id === categoryId)
+const DocumentStatusIndicator = ({ required, name, pageCount }: Props) => {
   const present = (pageCount ?? 0) > 0
   const label =
     pageCount === undefined

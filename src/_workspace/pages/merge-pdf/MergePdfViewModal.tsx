@@ -19,6 +19,7 @@ import CustomTextField from '@/components/mui/TextField'
 import Transition from '@/components/TransitionDialog'
 import DocumentStatusIndicator from './DocumentStatusIndicator'
 import { documentStatusColumns } from './documentStatus'
+import { useDocumentOrder } from '@/_workspace/react-query/hooks/useSettings'
 
 interface Props {
   open: boolean
@@ -28,6 +29,8 @@ interface Props {
 
 const MergePdfViewModal = ({ open, job, onClose }: Props) => {
   const detailQuery = useMergePdfDetail(open ? (job?.JOB_ID ?? null) : null)
+  const settings = useDocumentOrder()
+  const categories = documentStatusColumns(settings.data?.data.Status ? settings.data.data.ResultOnDb : [])
   const currentJob = detailQuery.data?.data.ResultOnDb[0]?.job ?? job
   return (
     <Dialog
@@ -115,7 +118,7 @@ const MergePdfViewModal = ({ open, job, onClose }: Props) => {
               </Alert>
             ) : (
               <Grid container spacing={2}>
-                {documentStatusColumns.map(category => {
+                {categories.map(category => {
                   const count = currentJob?.DOCUMENT_PAGE_COUNTS?.[category.categoryId] ?? 0
                   return (
                     <Grid key={category.id} size={{ xs: 12, sm: 6 }}>
@@ -131,7 +134,7 @@ const MergePdfViewModal = ({ open, job, onClose }: Props) => {
                         }}
                       >
                         <DocumentStatusIndicator
-                          categoryId={category.categoryId}
+                          required={category.required}
                           name={category.name}
                           pageCount={currentJob?.DOCUMENT_PAGE_COUNTS ? count : undefined}
                         />

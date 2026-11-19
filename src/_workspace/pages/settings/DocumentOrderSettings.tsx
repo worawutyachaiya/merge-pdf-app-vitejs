@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { AxiosError } from 'axios'
 import {
   DndContext,
@@ -26,7 +26,9 @@ import {
   CardHeader,
   Chip,
   CircularProgress,
+  IconButton,
   Stack,
+  TextField,
   Typography
 } from '@mui/material'
 import { useCheckPermission } from '@/_template/CheckPermission'
@@ -44,13 +46,17 @@ const saveErrorMessage = (error: Error) => {
 const SortableCategory = ({
   category,
   index,
-  disabled
+  disabled,
+  onRename,
+  onRemove
 }: {
   category: DocumentOrderCategory
   index: number
   disabled: boolean
+  onRename: (name: string) => void
+  onRemove: () => void
 }) => {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+  const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } = useSortable({
     id: category.CATEGORY_ID,
     disabled
   })
@@ -58,12 +64,9 @@ const SortableCategory = ({
   return (
     <Stack
       ref={setNodeRef}
-      {...attributes}
-      {...listeners}
       direction='row'
       alignItems='center'
       spacing={3}
-      aria-label={`${index + 1}. ${category.CATEGORY_NAME}. Drag to reorder`}
       sx={{
         px: 3,
         py: 2.5,
@@ -76,22 +79,35 @@ const SortableCategory = ({
         boxShadow: isDragging ? 3 : undefined,
         transform: CSS.Transform.toString(transform ? { ...transform, x: 0 } : null),
         transition,
-        cursor: disabled ? 'default' : isDragging ? 'grabbing' : 'grab',
-        touchAction: disabled ? 'auto' : 'none',
-        userSelect: 'none',
         '&:hover': { bgcolor: disabled ? undefined : 'action.hover' },
         '&:focus-visible': { outline: '2px solid', outlineColor: 'primary.main', outlineOffset: 2 }
       }}
     >
-      <i
-        className='tabler-grip-vertical'
-        aria-hidden='true'
-        style={{ color: 'var(--mui-palette-text-disabled)', flexShrink: 0 }}
-      />
+      <IconButton
+        ref={setActivatorNodeRef}
+        {...attributes}
+        {...listeners}
+        aria-label={`Reorder ${category.CATEGORY_NAME || 'new document type'}`}
+        disabled={disabled}
+        sx={{ touchAction: 'none', cursor: isDragging ? 'grabbing' : 'grab' }}
+      >
+        <i className='tabler-grip-vertical' />
+      </IconButton>
       <Chip label={index + 1} size='small' variant='tonal' sx={{ minWidth: 30, flexShrink: 0 }} />
-      <Typography variant='body2' sx={{ flex: 1, minWidth: 0 }}>
-        {category.CATEGORY_NAME}
-      </Typography>
+      <TextField
+        size='small'
+        disabled={disabled}
+        value={category.CATEGORY_NAME}
+        placeholder='Document type name'
+        slotProps={{ htmlInput: { 'aria-label': `Document type name ${index + 1}`, maxLength: 100 } }}
+        onChange={event => onRename(event.target.value)}
+        sx={{ flex: 1, minWidth: 0 }}
+      />
+      {category.CATEGORY_ID !== 10 && (
+        <IconButton disabled={disabled} color='error' aria-label={`Remove ${category.CATEGORY_NAME || 'new document type'}`} onClick={onRemove}>
+          <i className='tabler-trash' />
+        </IconButton>
+      )}
     </Stack>
   )
 }
@@ -104,6 +120,9 @@ const DocumentOrderForm = ({
   onReload: () => void
 }) => {
   const [order, setOrder] = useState(initialOrder)
+  const nextTemporaryId = useRef(-1)
+  const enabled = order.filter(item => item.IS_ENABLED === 1)
+  const removed = order.filter(item => item.IS_ENABLED === 0)
   const [draggingId, setDraggingId] = useState<number | null>(null)
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
@@ -111,7 +130,13 @@ const DocumentOrderForm = ({
   )
   const checkPermission = useCheckPermission()
   const canUpdate = Boolean(checkPermission(Number(import.meta.env.VITE_APPLICATION_ID), MENU_ID, 'IS_UPDATE', false))
-  const changed = order.some((item, index) => item.CATEGORY_ID !== initialOrder[index]?.CATEGORY_ID)
+  const changed = order.length !== initialOrder.length || order.some((item, index) =>
+    item.CATEGORY_ID !== initialOrder[index]?.CATEGORY_ID ||
+    item.CATEGORY_NAME.trim() !== initialOrder[index]?.CATEGORY_NAME ||
+    item.IS_ENABLED !== initialOrder[index]?.IS_ENABLED
+  )
+  const names = enabled.map(item => item.CATEGORY_NAME.trim().toLowerCase())
+  const invalidNames = names.some(name => !name) || new Set(names).size !== names.length
   const mutation = useSaveDocumentOrder(
     response => {
       if (response.data.Status) ToastMessageSuccess({ message: 'Document order saved' })
@@ -120,6 +145,20 @@ const DocumentOrderForm = ({
     error => ToastMessageError({ message: saveErrorMessage(error) })
   )
   const disabled = !canUpdate || mutation.isPending
+  const editCategory = (id: number, fields: Partial<DocumentOrderCategory>) =>
+    setOrder(current => current.map(item => item.CATEGORY_ID === id ? { ...item, ...fields } : item))
+
+  const addCategory = () => {
+    const id = nextTemporaryId.current--
+    setOrder(current => [...current, {
+      CATEGORY_ID: id,
+      CATEGORY_NAME: '',
+      SORT_ORDER: 0,
+      REVISION_NO: 0,
+      IS_ENABLED: 1,
+      REQUIRED_FOR_COMPLETE: 0
+    }])
+  }
 
   const move = ({ active, over }: DragEndEvent) => {
     setDraggingId(null)
@@ -152,25 +191,65 @@ const DocumentOrderForm = ({
         onDragEnd={move}
         onDragCancel={() => setDraggingId(null)}
       >
-        <SortableContext items={order.map(item => item.CATEGORY_ID)} strategy={verticalListSortingStrategy}>
+        <SortableContext items={enabled.map(item => item.CATEGORY_ID)} strategy={verticalListSortingStrategy}>
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-            {order.map((category, index) => (
-              <SortableCategory key={category.CATEGORY_ID} category={category} index={index} disabled={disabled} />
+            {enabled.map((category, index) => (
+              <SortableCategory
+                key={category.CATEGORY_ID}
+                category={category}
+                index={index}
+                disabled={disabled}
+                onRename={name => editCategory(category.CATEGORY_ID, { CATEGORY_NAME: name })}
+                onRemove={() => {
+                  if (category.CATEGORY_ID < 0)
+                    setOrder(current => current.filter(item => item.CATEGORY_ID !== category.CATEGORY_ID))
+                  else editCategory(category.CATEGORY_ID, {
+                    IS_ENABLED: 0,
+                    CATEGORY_NAME: category.CATEGORY_NAME.trim() ||
+                      initialOrder.find(item => item.CATEGORY_ID === category.CATEGORY_ID)!.CATEGORY_NAME
+                  })
+                }}
+              />
             ))}
           </Box>
         </SortableContext>
       </DndContext>
+      <Box>
+        <Button variant='outlined' disabled={disabled || order.length >= 255} onClick={addCategory}>
+          Add document type
+        </Button>
+      </Box>
+      {!!removed.length && (
+        <Stack spacing={1}>
+          <Typography variant='subtitle2'>Removed document types</Typography>
+          {removed.map(category => (
+            <Stack key={category.CATEGORY_ID} direction='row' spacing={2} alignItems='center'>
+              <Typography variant='body2'>{category.CATEGORY_NAME}</Typography>
+              <Button size='small' disabled={disabled} onClick={() => editCategory(category.CATEGORY_ID, { IS_ENABLED: 1 })}>
+                Restore
+              </Button>
+            </Stack>
+          ))}
+        </Stack>
+      )}
+      {invalidNames && <Alert severity='warning'>Enter a different name for each enabled document type.</Alert>}
       <Stack direction='row' spacing={2}>
         <Button
           variant='contained'
           color='success'
-          disabled={disabled || !changed || draggingId !== null}
+          disabled={disabled || !changed || invalidNames || draggingId !== null}
           startIcon={
             mutation.isPending ? <CircularProgress size={18} color='inherit' /> : <i className='tabler-device-floppy' />
           }
           onClick={() => {
             if (!checkPermission(Number(import.meta.env.VITE_APPLICATION_ID), MENU_ID, 'IS_UPDATE')) return
-            mutation.mutate(order.map(item => ({ categoryId: item.CATEGORY_ID, revisionNo: item.REVISION_NO })))
+            mutation.mutate(order.map(item => ({
+              ...(item.CATEGORY_ID < 0
+                ? { categoryId: null }
+                : { categoryId: item.CATEGORY_ID, revisionNo: item.REVISION_NO }),
+              name: item.CATEGORY_NAME.trim(),
+              enabled: item.IS_ENABLED === 1
+            })))
           }}
         >
           {mutation.isPending ? 'Saving...' : 'Save'}
@@ -195,7 +274,7 @@ const DocumentOrderSettings = () => {
     <Card>
       <CardHeader
         title='Document order'
-        subheader='Drag to reorder documents for Import and Sort by document type.'
+        subheader='Manage the document types and order used in Combination.'
         titleTypographyProps={{ variant: 'h5' }}
       />
       <CardContent>

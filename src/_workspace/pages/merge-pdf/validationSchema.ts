@@ -6,14 +6,7 @@ import type AxiosResponseI from '@/libs/axios/types/AxiosResponseInterface'
 import UserProfileSettingProgramServices from '@/services/common-system/UserProfileSettingProgramServices'
 import type { UserProfileSettingProgramI } from '@/types/common-system/UserProfileSettingProgram'
 import { getUserData } from '@/utils/user-profile/userLoginProfile'
-import { documentStatusColumnIds } from './documentStatus'
 import { resolveColumnOrder } from './columnOrder'
-
-export const mergePdfFormSchema = z.object({
-  title: z.string().trim().max(255)
-})
-export type MergePdfFormValues = z.infer<typeof mergePdfFormSchema>
-export const mergePdfFormDefaults: MergePdfFormValues = { title: '' }
 
 export const mergePdfStatusOptions = [
   { value: 'DRAFT' as const, label: 'Draft' },
@@ -25,7 +18,7 @@ export const mergePdfDefaultColumnOrder = [
   'STATUS',
   'OUTPUT_FILE_NAME',
   'JOB_TITLE',
-  ...documentStatusColumnIds,
+  'HAWB',
   'REVISION_NO',
   'DOCUMENT_COUNT',
   'PAGE_COUNT',
@@ -122,7 +115,6 @@ export const fetchMergePdfListValues = async (menuId: number): Promise<MergePdfL
     const columnOrder = resolveColumnOrder(
       saved.searchResults?.columnOrder ?? [],
       columns,
-      documentStatusColumnIds,
       needsColumnOrderMigration
     )
     return {
@@ -143,9 +135,7 @@ export const fetchMergePdfListValues = async (menuId: number): Promise<MergePdfL
         columnOrder,
         columnOrderVersion: 1,
         needsColumnOrderMigration,
-        columnVisibility: Object.fromEntries(
-          columns.map(column => [column, saved.searchResults?.columnVisibility?.[column] ?? true])
-        ),
+        columnVisibility: { ...defaults.searchResults.columnVisibility, ...saved.searchResults?.columnVisibility },
         columnFilterFns: {
           ...defaults.searchResults.columnFilterFns,
           ...saved.searchResults?.columnFilterFns

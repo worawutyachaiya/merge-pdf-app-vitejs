@@ -1,3 +1,5 @@
+import type { TextStyle } from './textFormatting'
+
 export interface AnnotationPlacement {
   id: string
   x: number
@@ -7,8 +9,20 @@ export interface AnnotationPlacement {
 }
 
 export type PageAnnotation = AnnotationPlacement & (
-  { kind: 'remark'; text: string; fontSize?: number; color?: string } | { kind: 'estamp'; image: string }
+  ({ kind: 'remark'; text: string; fontSize?: number } & TextStyle) |
+  { kind: 'estamp'; image: string } |
+  { kind: 'cover'; color: string }
 )
+
+export const annotationLabels = { remark: 'Remark', estamp: 'E-stamp', cover: 'Cover rectangle' }
+
+export const rotatePageCovers = (items: readonly PageAnnotation[], delta: 90 | 270): PageAnnotation[] =>
+  items.map(item => {
+    if (item.kind !== 'cover') return item
+    const x = delta === 90 ? 1 - item.y - item.height : item.y
+    const y = delta === 90 ? item.x : 1 - item.x - item.width
+    return { ...item, x: Math.max(0, x), y: Math.max(0, y), width: item.height, height: item.width }
+  })
 
 // UAT runs on HTTP; getRandomValues works there while randomUUID requires HTTPS.
 export const annotationId = () => {
@@ -43,8 +57,8 @@ export const resizeAnnotation = (
     width = item.width * factor
     height = item.height * factor
   } else {
-    width = Math.max(0.01, Math.min(maxWidth, item.width + delta.x * corner.x / page.width))
-    height = Math.max(0.01, Math.min(maxHeight, item.height + delta.y * corner.y / page.height))
+    width = Math.min(maxWidth, Math.max(0.01, item.width + delta.x * corner.x / page.width))
+    height = Math.min(maxHeight, Math.max(0.01, item.height + delta.y * corner.y / page.height))
   }
   return { ...item, x: corner.x < 0 ? anchorX - width : anchorX, y: corner.y < 0 ? anchorY - height : anchorY, width, height }
 }

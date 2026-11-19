@@ -1,7 +1,11 @@
 ﻿import { useEffect, useMemo, useState } from 'react'
 
 import AddIcon from '@mui/icons-material/Add'
-import { Button, Card, CardHeader, Chip, IconButton, Tooltip, Stack } from '@mui/material'
+import {
+  Alert, Button, Card, CardHeader, Chip, Dialog, DialogActions, DialogContent, DialogTitle,
+  IconButton, Tooltip, Stack, Typography
+} from '@mui/material'
+import { AxiosError } from 'axios'
 import dayjs from 'dayjs'
 import type {
   MRT_ColumnDef,
@@ -20,8 +24,12 @@ import { useUpdateEffect } from 'react-use'
 import { useCheckPermission } from '@/_template/CheckPermission'
 import { useDxContext } from '@/_template/DxContextProvider'
 import { DxMRTTable } from '@/_template/DxMRTTable'
-import { useMergePdfJobs } from '@/_workspace/react-query/hooks/useMergePdf'
+import { useMergePdfActions, useMergePdfJobs } from '@/_workspace/react-query/hooks/useMergePdf'
+import { useDocumentOrder } from '@/_workspace/react-query/hooks/useSettings'
 import type { MergePdfJob } from '@/_workspace/types/merge-pdf/MergePdf'
+import DialogCloseButton from '@/components/dialogs/DialogCloseButton'
+import CustomTextField from '@/components/mui/TextField'
+import Transition from '@/components/TransitionDialog'
 import CategoryPdfPreviewModal from './CategoryPdfPreviewModal'
 import MergePdfRestoreModal from './MergePdfRestoreModal'
 
@@ -31,19 +39,30 @@ import MergePdfViewModal from './MergePdfViewModal'
 import MergePdfPreviewModal from './MergePdfPreviewModal'
 import { mergePdfDefaultColumnOrder, type MergePdfListValues } from './validationSchema'
 import { documentStatusColumns } from './documentStatus'
+import { withDocumentColumns } from './columnOrder'
 import DocumentStatusIndicator from './DocumentStatusIndicator'
 import { formatMergePdfSearchDate } from './validationSchema'
 
 interface Props {
   onOpen: (jobId: number) => void
-  onAdd: () => void
+  onAdd: (month: string) => void
+  creatingDraft: boolean
   refreshVersion: number
 }
 
-const MergePdfSearchResult = ({ onOpen, onAdd, refreshVersion }: Props) => {
+const MergePdfSearchResult = ({ onOpen, onAdd, creatingDraft, refreshVersion }: Props) => {
   const { isEnableFetching, setIsEnableFetching, pagination, setPagination } = useDxContext()
   const { getValues, setValue } = useFormContext<MergePdfListValues>()
   const checkPermission = useCheckPermission()
+  const canEditHawb = Boolean(checkPermission(Number(import.meta.env.VITE_APPLICATION_ID), MENU_ID, 'IS_UPDATE', false))
+  const { updateHawb } = useMergePdfActions()
+  const [hawbEdit, setHawbEdit] = useState<{ job: MergePdfJob; value: string } | null>(null)
+  const [hawbError, setHawbError] = useState('')
+  const { data: settings } = useDocumentOrder()
+  const categoryColumns = useMemo(() => documentStatusColumns(settings?.data.Status ? settings.data.ResultOnDb : []), [settings])
+  const [documentMonth, setDocumentMonth] = useState(() =>
+    new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Bangkok', year: 'numeric', month: '2-digit' }).format(new Date())
+  )
   const [openView, setOpenView] = useState(false)
   const [openDelete, setOpenDelete] = useState(false)
   const [restoreJob, setRestoreJob] = useState<MergePdfJob | null>(null)
@@ -98,6 +117,26 @@ const MergePdfSearchResult = ({ onOpen, onAdd, refreshVersion }: Props) => {
     },
     isEnableFetching
   )
+
+  const saveHawb = async (hawb: string | null) => {
+    if (!hawbEdit || updateHawb.isPending) return
+    const { JOB_ID: jobId, ROW_VERSION: rowVersion } = hawbEdit.job
+    setHawbError('')
+    try {
+      await updateHawb.mutateAsync({ jobId, rowVersion, hawb })
+      setHawbEdit(null)
+      void jobs.refetch()
+    } catch (error) {
+      const response = error instanceof AxiosError ? error.response : undefined
+      if (response?.status === 409) {
+        const refreshed = await jobs.refetch()
+        const latest = refreshed.data?.data.ResultOnDb.find(job => job.JOB_ID === jobId)
+        if (latest) setHawbEdit(current => current?.job.JOB_ID === jobId ? { ...current, job: latest } : current)
+      }
+      const message = response?.data?.Message
+      setHawbError(typeof message === 'string' ? message : 'Could not save HAWB.')
+    }
+  }
 
   useEffect(() => {
     if (!jobs.isFetching) setIsEnableFetching(false)
@@ -173,11 +212,43 @@ const MergePdfSearchResult = ({ onOpen, onAdd, refreshVersion }: Props) => {
         Cell: ({ row }) =>
           /^I\d{2}-\d{4,}$/.test(row.original.JOB_CODE) ? row.original.JOB_CODE : row.original.JOB_TITLE
       },
-      ...documentStatusColumns.map<MRT_ColumnDef<MergePdfJob>>(category => ({
+      {
+        accessorKey: 'HAWB',
+        header: 'HAWB',
+        size: 190,
+        minSize: 125,
+        enableSorting: false,
+        enableColumnFilter: false,
+        Cell: ({ row }) => {
+          const job = row.original
+          return (
+            <Stack direction='row' alignItems='center' spacing={1} sx={{ minWidth: 0, width: '100%' }}>
+              <Typography component='span' variant='inherit' noWrap sx={{ flex: 1, minWidth: 0 }} title={job.HAWB ?? undefined}>
+                {job.HAWB || '—'}
+              </Typography>
+              {canEditHawb && job.INUSE === 1 && job.STATUS !== 'COMPLETING' && (
+                <Tooltip title='Edit HAWB'>
+                  <IconButton
+                    size='small'
+                    aria-label={`Edit HAWB for ${job.JOB_TITLE}`}
+                    onClick={() => {
+                      setHawbError('')
+                      setHawbEdit({ job, value: job.HAWB ?? '' })
+                    }}
+                  >
+                    <i className='tabler-edit' />
+                  </IconButton>
+                </Tooltip>
+              )}
+            </Stack>
+          )
+        }
+      },
+      ...categoryColumns.map<MRT_ColumnDef<MergePdfJob>>(category => ({
         id: category.id,
-        header: category.label,
+        header: category.name,
         accessorFn: job => job.DOCUMENT_PAGE_COUNTS?.[category.categoryId],
-        size: category.categoryId === 7 ? 75 : 65,
+        size: Math.max(75, Math.min(220, category.name.length * 8 + 24)),
         minSize: 55,
         grow: false,
         enableSorting: false,
@@ -190,7 +261,7 @@ const MergePdfSearchResult = ({ onOpen, onAdd, refreshVersion }: Props) => {
           const counts = row.original.DOCUMENT_PAGE_COUNTS
           const count = counts ? (counts[category.categoryId] ?? 0) : undefined
           const indicator = (
-            <DocumentStatusIndicator categoryId={category.categoryId} name={category.name} pageCount={count} />
+            <DocumentStatusIndicator required={category.required} name={category.name} pageCount={count} />
           )
           return (count ?? 0) > 0 && row.original.INUSE === 1 ? (
             <IconButton
@@ -255,7 +326,7 @@ const MergePdfSearchResult = ({ onOpen, onAdd, refreshVersion }: Props) => {
         filterFn: 'contains'
       }
     ],
-    []
+    [canEditHawb, categoryColumns]
   )
 
   return (
@@ -264,18 +335,33 @@ const MergePdfSearchResult = ({ onOpen, onAdd, refreshVersion }: Props) => {
         <CardHeader
           title='Search result'
           titleTypographyProps={{ variant: 'h5' }}
+          sx={{ flexWrap: 'wrap', gap: 2, '& .MuiCardHeader-action': { m: 0, alignSelf: 'center' } }}
           action={
-            <Button
-              variant='contained'
-              startIcon={<AddIcon />}
-              color='success'
-              className='rounded-3xl'
-              onClick={() => {
-                if (checkPermission(Number(import.meta.env.VITE_APPLICATION_ID), MENU_ID, 'IS_CREATE')) onAdd()
-              }}
-            >
-              Add New
-            </Button>
+            <Stack direction='row' spacing={2} alignItems='flex-end'>
+              <CustomTextField
+                type='month'
+                label='Document month'
+                value={documentMonth}
+                disabled={creatingDraft}
+                onChange={event => setDocumentMonth(event.target.value)}
+                slotProps={{ inputLabel: { shrink: true } }}
+              />
+              <Button
+                variant='contained'
+                startIcon={<AddIcon />}
+                color='success'
+                className='rounded-3xl'
+                sx={{ whiteSpace: 'nowrap' }}
+                loading={creatingDraft}
+                disabled={!/^\d{4}-(0[1-9]|1[0-2])$/.test(documentMonth)}
+                onClick={() => {
+                  if (checkPermission(Number(import.meta.env.VITE_APPLICATION_ID), MENU_ID, 'IS_CREATE'))
+                    onAdd(documentMonth)
+                }}
+              >
+                Add New
+              </Button>
+            </Stack>
           }
         />
         <DxMRTTable
@@ -311,7 +397,7 @@ const MergePdfSearchResult = ({ onOpen, onAdd, refreshVersion }: Props) => {
             density,
             columnVisibility,
             columnPinning,
-            columnOrder,
+            columnOrder: withDocumentColumns(columnOrder, categoryColumns.map(category => category.id)),
             columnFilterFns
           }}
           renderRowActions={({ row }) => (
@@ -381,6 +467,69 @@ const MergePdfSearchResult = ({ onOpen, onAdd, refreshVersion }: Props) => {
           isError={jobs.isError}
         />
       </Card>
+      <Dialog
+        open={hawbEdit !== null}
+        fullWidth
+        maxWidth='xs'
+        aria-labelledby='merge-pdf-hawb-title'
+        TransitionComponent={Transition}
+        disableEscapeKeyDown={updateHawb.isPending}
+        onClose={(_, reason) => {
+          if (!updateHawb.isPending && reason !== 'backdropClick') setHawbEdit(null)
+        }}
+        sx={{
+          '& .MuiDialog-paper': { overflow: 'visible' },
+          '& .MuiDialog-container': { justifyContent: 'center', alignItems: 'flex-start' }
+        }}
+        PaperProps={{ sx: { top: 30, m: 0 } }}
+      >
+        <DialogTitle id='merge-pdf-hawb-title'>
+          <Typography variant='h5' component='span'>Edit HAWB</Typography>
+          <DialogCloseButton
+            aria-label='Close Edit HAWB'
+            onClick={() => setHawbEdit(null)}
+            disabled={updateHawb.isPending}
+            disableRipple
+          >
+            <i className='tabler-x' />
+          </DialogCloseButton>
+        </DialogTitle>
+        <DialogContent>
+          {hawbError && <Alert severity='error' sx={{ mb: 2 }}>{hawbError}</Alert>}
+          <CustomTextField
+            autoFocus
+            fullWidth
+            label='HAWB'
+            multiline
+            maxRows={4}
+            value={hawbEdit?.value ?? ''}
+            disabled={updateHawb.isPending}
+            slotProps={{ htmlInput: { maxLength: 1000 } }}
+            onChange={event => setHawbEdit(current => current ? { ...current, value: event.target.value } : current)}
+          />
+        </DialogContent>
+        <DialogActions sx={{ flexWrap: 'wrap' }}>
+          {hawbEdit?.job.HAWB_OVERRIDE != null && (
+            <Button disabled={updateHawb.isPending} onClick={() => void saveHawb(null)}>Use detected value</Button>
+          )}
+          <Button
+            variant='tonal'
+            color='secondary'
+            disabled={updateHawb.isPending}
+            onClick={() => setHawbEdit(null)}
+          >
+            Close
+          </Button>
+          <Button
+            variant='contained'
+            color='success'
+            loading={updateHawb.isPending}
+            onClick={() => void saveHawb(hawbEdit?.value ?? '')}
+          >
+            Save &amp; Complete
+          </Button>
+        </DialogActions>
+      </Dialog>
       {openDelete && rowSelected && (
         <MergePdfDeleteModal
           job={rowSelected.original}

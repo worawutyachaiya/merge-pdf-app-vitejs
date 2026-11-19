@@ -6,7 +6,10 @@ export interface MergePdfJob {
   STAMP_X?: number | null
   STAMP_Y?: number | null
   STAMP_FONT_SIZE?: number | null
+  STAMP_STYLE?: import('@/_workspace/pages/merge-pdf/textFormatting').TextStyle | null
   JOB_REFERENCE: string | null
+  HAWB_OVERRIDE?: string | null
+  HAWB?: string | null
   STATUS: 'DRAFT' | 'COMPLETING' | 'COMPLETED'
   ROW_VERSION: number
   REVISION_NO: number
@@ -88,20 +91,6 @@ export interface MergePdfForm {
   reference: string | null
 }
 
-export const MERGE_PDF_CATEGORIES = [
-  { id: 1, name: 'Import entry (ใบขน)' },
-  { id: 2, name: 'Invoice' },
-  { id: 3, name: 'Packing list' },
-  { id: 4, name: 'HAWB or AWB' },
-  { id: 5, name: 'MAWB' },
-  { id: 6, name: 'Permit Tisi' },
-  { id: 7, name: 'ใบเสร็จศุลกากร' },
-  { id: 8, name: 'DO' },
-  { id: 9, name: 'Delivery note' },
-  { id: 10, name: 'Other' }
-] as const
-
-export const REQUIRED_MERGE_PDF_CATEGORY_IDS = [1, 2, 4] as const
 export type BatchPageAction =
   | { kind: 'category'; categoryId: number }
   | { kind: 'rotate'; delta: 90 | 270 }

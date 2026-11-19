@@ -4,7 +4,8 @@ import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { Box, Checkbox, IconButton, Typography } from '@mui/material'
 
-import { MERGE_PDF_CATEGORIES, type MergePdfDocument, type MergePdfPage } from '@/_workspace/types/merge-pdf/MergePdf'
+import type { MergePdfDocument, MergePdfPage } from '@/_workspace/types/merge-pdf/MergePdf'
+import SelectCustom from '@/components/react-select/SelectCustom'
 
 import MergePdfPageThumbnail from './MergePdfPageThumbnail'
 
@@ -17,6 +18,9 @@ interface Props {
   onSelect: () => void
   onRotate: (delta: 90 | 270) => void
   onRemove: () => void
+  onCategoryChange: (categoryId: number) => void
+  categoryOptions: { value: number; label: string }[]
+  categoryValue: { value: number; label: string }
   checked: boolean
   onCheck: (checked: boolean) => void
   onPaintStart: (event: PointerEvent<HTMLButtonElement>) => void
@@ -32,6 +36,9 @@ const SortablePage = ({
   onSelect,
   onRotate,
   onRemove,
+  onCategoryChange,
+  categoryOptions,
+  categoryValue,
   checked,
   onCheck,
   onPaintStart,
@@ -39,7 +46,6 @@ const SortablePage = ({
 }: Props) => {
   const [visible, setVisible] = useState(false)
   const cardRef = useRef<HTMLDivElement | null>(null)
-  const category = MERGE_PDF_CATEGORIES.find(item => item.id === page.CATEGORY_ID)
   const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } = useSortable({
     id: page.PAGE_ID,
     disabled
@@ -170,8 +176,7 @@ const SortablePage = ({
           />
         </Box>
         <Typography variant='body2' sx={{ mt: 1 }} noWrap>
-          {page.SORT_ORDER}.{' '}
-          {page.CLASSIFICATION_SOURCE === 'UNKNOWN' ? 'Type not selected' : (category?.name ?? 'Document')}
+          Page {page.SORT_ORDER}
         </Typography>
         <Typography
           variant='caption'
@@ -187,6 +192,20 @@ const SortablePage = ({
             {page.DESCRIPTION}
           </Typography>
         )}
+      </Box>
+      <Box sx={{ px: 1, pb: 1 }}>
+        <SelectCustom
+          aria-label={`Document type for page ${page.SORT_ORDER}`}
+          inputId={`merge-pdf-card-type-${page.PAGE_ID}`}
+          placeholder='Type not selected'
+          options={categoryOptions}
+          value={page.CLASSIFICATION_SOURCE === 'UNKNOWN' ? null : categoryValue}
+          isDisabled={disabled || !categoryOptions.length}
+          menuPlacement='auto'
+          onChange={option => {
+            if (option) onCategoryChange(option.value)
+          }}
+        />
       </Box>
     </Box>
   )

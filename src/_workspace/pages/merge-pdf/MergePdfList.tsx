@@ -21,11 +21,12 @@ import {
 
 interface Props {
   onOpen: (jobId: number) => void
-  onAdd: () => void
+  onAdd: (month: string) => void
+  creatingDraft: boolean
   refreshVersion: number
 }
 
-const InnerList = ({ onOpen, onAdd, refreshVersion }: Props) => {
+const InnerList = ({ onOpen, onAdd, creatingDraft, refreshVersion }: Props) => {
   const { setIsEnableFetching } = useDxContext()
   const [appliedSearchFilters, setAppliedSearchFilters] = useState<MergePdfListValues['searchFilters'] | null>(null)
   const methods = useForm<MergePdfListValues>({
@@ -67,7 +68,7 @@ const InnerList = ({ onOpen, onAdd, refreshVersion }: Props) => {
           {isLoading ? (
             <SkeletonCustom />
           ) : (
-            <MergePdfSearchResult onOpen={onOpen} onAdd={onAdd} refreshVersion={refreshVersion} />
+            <MergePdfSearchResult onOpen={onOpen} onAdd={onAdd} creatingDraft={creatingDraft} refreshVersion={refreshVersion} />
           )}
         </Grid>
       </Grid>

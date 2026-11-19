@@ -120,6 +120,7 @@ export const useMergePdfActions = () => {
   }
   return {
     create: useMutation({ mutationFn: MergePdfServices.create, onSuccess: accept }),
+    updateHawb: useMutation({ mutationFn: MergePdfServices.updateHawb, onSuccess: accept }),
     saveEditor: useMutation({
       mutationFn: (input: {
         jobId: number

@@ -11,6 +11,7 @@ import axiosRequest from '@/libs/axios/axiosRequest'
 import type { ResultDataResponseI } from '@/libs/axios/types/AxiosResponseInterface'
 import type { AxiosRequestConfig, AxiosResponse } from 'axios'
 import { getUserData } from '@/utils/user-profile/userLoginProfile'
+import type { SystemFontInfo } from '@/_workspace/pages/merge-pdf/textFormatting'
 
 const root = MergePdfAPI.API_ROOT_URL
 
@@ -29,6 +30,14 @@ const auditRequest = <T>(options: AxiosRequestConfig): Promise<AxiosResponse<T>>
 }
 
 export default class MergePdfServices {
+  static async systemIndexFonts() {
+    const response = await axiosRequest<ResultDataResponseI<SystemFontInfo>>({
+      url: `${root}/editor/system-fonts`,
+      method: 'GET'
+    })
+    return response.data.ResultOnDb
+  }
+
   static prepareEStampImage(file: File) {
     const data = new FormData()
     data.append('file', file)
@@ -114,6 +123,14 @@ export default class MergePdfServices {
       url: `${root}/jobs/next-code`,
       data: { month },
       method: 'POST'
+    })
+  }
+
+  static updateHawb({ jobId, rowVersion, hawb }: { jobId: number; rowVersion: number; hawb: string | null }) {
+    return auditRequest<ResultDataResponseI<MergePdfDetail>>({
+      url: `${root}/jobs/${jobId}/hawb`,
+      method: 'POST',
+      data: { rowVersion, hawb }
     })
   }
 
