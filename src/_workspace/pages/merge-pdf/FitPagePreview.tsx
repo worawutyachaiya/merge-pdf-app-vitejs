@@ -248,10 +248,11 @@ export default function FitPagePreview({ previewUrl, pageNumber, visualDeskew = 
         target.closest('[role="dialog"]') !== dialog ||
         target.isContentEditable || target.closest('input, textarea, select') || window.getSelection()?.toString()) return
       const key = event.key.toLowerCase()
-      if (key === 'c' && selected?.kind === 'cover') {
+      // The physical keys stay the same when the active layout is Thai.
+      if ((event.code === 'KeyC' || key === 'c') && selected?.kind === 'cover') {
         event.preventDefault()
         coverClipboard.current = selected
-      } else if (key === 'v' && coverClipboard.current && annotations.length < 50) {
+      } else if ((event.code === 'KeyV' || key === 'v') && coverClipboard.current && annotations.length < 50) {
         event.preventDefault()
         if (event.repeat) return
         const copy = duplicateCover(coverClipboard.current, annotations)
