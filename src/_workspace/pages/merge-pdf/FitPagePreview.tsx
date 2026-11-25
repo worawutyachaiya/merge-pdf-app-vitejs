@@ -33,6 +33,8 @@ const defaultStampStyle: TextStyle = {}
 interface Props {
   previewUrl: string
   pageNumber: number
+  zoom: number | null
+  setZoom: React.Dispatch<React.SetStateAction<number | null>>
   visualDeskew?: number
   stamp?: { name: string; coordinates?: StampCoordinates; fontSize?: number; style?: TextStyle }
   onStampMove?: (coordinates: StampCoordinates) => void
@@ -44,7 +46,7 @@ interface Props {
   onAnnotationBusyChange?: (busy: boolean) => void
 }
 
-export default function FitPagePreview({ previewUrl, pageNumber, visualDeskew = 0, stamp, onStampMove, onStampSizeChange, onStampStyleChange, annotations = [], coverClipboard, onAnnotationsChange, onAnnotationBusyChange }: Props) {
+export default function FitPagePreview({ previewUrl, pageNumber, zoom, setZoom, visualDeskew = 0, stamp, onStampMove, onStampSizeChange, onStampStyleChange, annotations = [], coverClipboard, onAnnotationsChange, onAnnotationBusyChange }: Props) {
   const root = useRef<HTMLDivElement | null>(null)
   const imageInput = useRef<HTMLInputElement | null>(null)
   const [selectedAnnotation, setSelectedAnnotation] = useState<string | null>(null)
@@ -91,14 +93,9 @@ export default function FitPagePreview({ previewUrl, pageNumber, visualDeskew = 
   const [dragging, setDragging] = useState(false)
   const [page, setPage] = useState<PDFPageProxy | null>(null)
   const [size, setSize] = useState({ width: 0, height: 0 })
-  const [zoom, setZoom] = useState<number | null>(null)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(true)
   const [retry, setRetry] = useState(0)
-  useEffect(() => {
-    setZoom(null)
-    viewport.current?.scrollTo(0, 0)
-  }, [pageNumber])
   useEffect(() => {
     if (!viewport.current) return
     const observer = new ResizeObserver(entries => {
@@ -161,7 +158,7 @@ export default function FitPagePreview({ previewUrl, pageNumber, visualDeskew = 
     }
     node.addEventListener('wheel', handleWheel, { passive: false })
     return () => node.removeEventListener('wheel', handleWheel)
-  }, [page, fitScale])
+  }, [page, fitScale, setZoom])
 
   useEffect(() => {
     if (!page || !canvas.current || !size.width || !size.height) return

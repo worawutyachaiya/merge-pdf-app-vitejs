@@ -67,11 +67,12 @@ export default class MergePdfServices {
     })
   }
 
-  static prepareFile(file: File, combined: boolean, categoryId = 10) {
+  static prepareFile(file: File, combined: boolean, categoryId = 10, detectExcelPages = false) {
     const data = new FormData()
     data.append('file', file)
     data.append('combined', String(combined))
     data.append('categoryId', String(categoryId))
+    if (detectExcelPages) data.append('detectExcelPages', 'true')
     return auditRequest<
       ResultDataResponseI<{
         sourceType: 'PDF' | 'EXCEL' | 'IMAGE'

@@ -18,13 +18,10 @@ import classNames from 'classnames'
 import { Controller, useFormContext } from 'react-hook-form'
 
 import { useDxContext } from '@/_template/DxContextProvider'
-import { useCreate } from '@/libs/react-query/hooks/common-system/useUserProfileSettingProgram'
 import CustomTextField from '@/components/mui/TextField'
 import SelectCustom from '@/components/react-select/SelectCustom'
-import { getUserData } from '@/utils/user-profile/userLoginProfile'
 import AppReactDatepicker from '@/libs/styles/AppReactDatepicker'
 
-import { MENU_ID } from './env'
 import { mergePdfStatusOptions, type MergePdfListValues } from './validationSchema'
 
 interface Props {
@@ -35,26 +32,10 @@ const MergePdfSearchFilters = ({ onSearch }: Props) => {
   const [collapse, setCollapse] = useState(false)
   const { control, getValues, handleSubmit, setValue } = useFormContext<MergePdfListValues>()
   const { setIsEnableFetching, setPagination } = useDxContext()
-  const { mutate } = useCreate(
-    () => undefined,
-    () => undefined
-  )
-
-  const saveProfile = () => {
-    if (MENU_ID <= 0) return
-    mutate({
-      USER_ID: getUserData().USER_ID,
-      APPLICATION_ID: import.meta.env.VITE_APPLICATION_ID,
-      MENU_ID: MENU_ID.toString(),
-      USER_PROFILE_SETTING_PROGRAM_DATA: getValues()
-    })
-  }
-
   const search = () => {
     onSearch(getValues('searchFilters'))
     setPagination({ pageIndex: 0, pageSize: getValues('searchResults.pageSize') ?? 10 })
     setIsEnableFetching(true)
-    saveProfile()
   }
 
   const clear = () => {
@@ -89,7 +70,7 @@ const MergePdfSearchFilters = ({ onSearch }: Props) => {
         }
       />
       <Collapse in={!collapse}>
-        <CardContent>
+        <CardContent component='form' onSubmit={handleSubmit(search)}>
           <Grid container spacing={4}>
             <Grid size={12}>
               <Divider textAlign='left'>
@@ -259,10 +240,10 @@ const MergePdfSearchFilters = ({ onSearch }: Props) => {
               </Grid>
             ))}
             <Grid className='flex gap-4' size={12}>
-              <Button variant='contained' type='button' onClick={() => handleSubmit(search)()}>
+              <Button variant='contained' type='submit'>
                 Search
               </Button>
-              <Button variant='tonal' color='secondary' type='reset' onClick={clear}>
+              <Button variant='tonal' color='secondary' type='button' onClick={clear}>
                 Clear
               </Button>
             </Grid>

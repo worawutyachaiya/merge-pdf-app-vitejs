@@ -29,6 +29,7 @@ interface Props {
 const InnerList = ({ onOpen, onAdd, creatingDraft, refreshVersion }: Props) => {
   const { setIsEnableFetching } = useDxContext()
   const [appliedSearchFilters, setAppliedSearchFilters] = useState<MergePdfListValues['searchFilters'] | null>(null)
+  const [profileSaveRequest, setProfileSaveRequest] = useState(0)
   const methods = useForm<MergePdfListValues>({
     resolver: zodResolver(mergePdfListSchema),
     defaultValues: async () => {
@@ -52,6 +53,7 @@ const InnerList = ({ onOpen, onAdd, creatingDraft, refreshVersion }: Props) => {
           MENU_ID={MENU_ID}
           searchFiltersData={searchFilters}
           searchResultsMetadata={{ columnOrderVersion: 1 }}
+          saveRequest={profileSaveRequest}
           saveOnMount={methods.getValues('searchResults.needsColumnOrderMigration') === true}
         />
       )}
@@ -62,7 +64,10 @@ const InnerList = ({ onOpen, onAdd, creatingDraft, refreshVersion }: Props) => {
           </Grid>
         )}
         <Grid size={12}>
-          <MergePdfSearchFilters onSearch={setAppliedSearchFilters} />
+          <MergePdfSearchFilters onSearch={filters => {
+            setAppliedSearchFilters(filters)
+            setProfileSaveRequest(request => request + 1)
+          }} />
         </Grid>
         <Grid size={12}>
           {isLoading ? (

@@ -18,9 +18,10 @@ interface Props {
   searchFiltersData: object
   searchResultsMetadata?: Record<string, unknown>
   saveOnMount?: boolean
+  saveRequest?: number
 }
 
-function DxWatchSearchFilters({ MENU_ID, searchFiltersData, searchResultsMetadata, saveOnMount = false }: Props) {
+function DxWatchSearchFilters({ MENU_ID, searchFiltersData, searchResultsMetadata, saveOnMount = false, saveRequest }: Props) {
   const data = useWatch({
     name: [
       'searchResults.pageSize',
@@ -30,14 +31,17 @@ function DxWatchSearchFilters({ MENU_ID, searchFiltersData, searchResultsMetadat
       'searchResults.columnVisibility',
       'searchResults.columnPinning',
       'searchResults.columnOrder',
-      'searchResults.columnFilterFns'
+      'searchResults.columnFilterFns',
+      'searchResults.columnSizing'
     ],
     exact: true
   })
 
   const [isFirstMount, setIsFirstMount] = useState(true)
+  const tableSettings = JSON.stringify(data.slice(0, 8))
+  const columnSizing = JSON.stringify(data[8])
   const initialSaveStarted = useRef(false)
-  const migrationSaveQueue = useRef<Promise<void>>(Promise.resolve())
+  const saveQueue = useRef<Promise<void>>(Promise.resolve())
 
   // react-query
   const handleAdd = (data: Array<any>) => {
@@ -66,14 +70,15 @@ function DxWatchSearchFilters({ MENU_ID, searchFiltersData, searchResultsMetadat
           columnPinning: data[5],
           columnOrder: data[6],
           columnFilterFns: data[7],
+          columnSizing: data[8],
           ...searchResultsMetadata
         }
       }
     }
 
-    if (saveOnMount) {
-      // Keep the one-time migration save ahead of any subsequent user changes.
-      migrationSaveQueue.current = migrationSaveQueue.current
+    if (saveOnMount || saveRequest !== undefined) {
+      // Save changes in order so an older snapshot cannot overwrite a newer one.
+      saveQueue.current = saveQueue.current
         .then(async () => { await mutateAsync(dataItem) })
         .catch(() => undefined)
     } else {
@@ -101,6 +106,10 @@ function DxWatchSearchFilters({ MENU_ID, searchFiltersData, searchResultsMetadat
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  useUpdateEffect(() => {
+    if (saveRequest !== undefined) handleAdd(data)
+  }, [saveRequest, columnSizing])
+
   const [,] = useDebounce(
     () => {
       if (isFirstMount === false) {
@@ -108,12 +117,12 @@ function DxWatchSearchFilters({ MENU_ID, searchFiltersData, searchResultsMetadat
       }
     },
     1500,
-    [JSON.stringify(data)]
+    [tableSettings]
   )
 
   useUpdateEffect(() => {
     setIsFirstMount(false)
-  }, [JSON.stringify(data)])
+  }, [tableSettings])
 
   return <>{isError ? <div>An error occurred: {error.message}</div> : null}</>
 }

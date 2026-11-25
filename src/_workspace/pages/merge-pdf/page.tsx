@@ -123,6 +123,9 @@ interface ImportFile {
   description: string
 }
 
+const isExcelFile = (file: File) => /\.xlsx?$/i.test(file.name)
+const autoDetectExcelType = { value: 0, label: 'Auto-detect per page' }
+
 const MergePdfPage = () => {
   const [selectedJobId, setSelectedJobId] = useState<number | null>(null)
   const categoryQuery = useDocumentOrder()
@@ -138,6 +141,7 @@ const MergePdfPage = () => {
   const [busy, setBusy] = useState(false)
   const [confirmAction, setConfirmAction] = useState<Confirmation>(null)
   const [previewOpen, setPreviewOpen] = useState(false)
+  const [previewZoom, setPreviewZoom] = useState<number | null>(null)
   const coverClipboard = useRef<CoverAnnotation | null>(null)
   const [deskewInput, setDeskewInput] = useState('0')
   const [movePosition, setMovePosition] = useState('')
@@ -305,6 +309,26 @@ const MergePdfPage = () => {
   const selectedPage = detail?.pages.find(page => page.PAGE_ID === selectedPageId) ?? detail?.pages[0]
   useEffect(() => { setDeskewInput(String(selectedPage?.DESKEW_DEGREES ?? 0)) }, [selectedPage?.PAGE_ID, selectedPage?.DESKEW_DEGREES, previewOpen])
   const selectedPageIndex = detail?.pages.findIndex(page => page.PAGE_ID === selectedPage?.PAGE_ID) ?? -1
+  const savedDeskew = selectedPage?.DESKEW_DEGREES ?? 0
+  const deskewAngle = Number(deskewInput)
+  const validDeskew = deskewInput.trim() !== '' && Number.isFinite(deskewAngle) && Math.abs(deskewAngle) <= 15
+  const commitDeskew = () => {
+    if (!selectedPage || busy) return
+    if (!validDeskew) {
+      setDeskewInput(String(savedDeskew))
+      return
+    }
+    if (deskewAngle === savedDeskew) return
+    setCheckedPageIds([])
+    void changeDraft(current => ({
+      ...current,
+      pages: current.pages.map(page => page.PAGE_ID === selectedPage.PAGE_ID ? { ...page, DESKEW_DEGREES: deskewAngle } : page)
+    }))
+  }
+  const closePagePreview = () => {
+    commitDeskew()
+    setPreviewOpen(false)
+  }
   const previewQuery = useMergePdfPagePreview(
     detail?.job.JOB_ID ?? null,
     selectedPage?.PAGE_ID ?? null,
@@ -350,6 +374,13 @@ const MergePdfPage = () => {
     (categoryPositions.get(a.CATEGORY_ID) ?? Number.MAX_SAFE_INTEGER) -
     (categoryPositions.get(b.CATEGORY_ID) ?? Number.MAX_SAFE_INTEGER) || a.UPLOAD_ORDER - b.UPLOAD_ORDER
   ) ?? []
+  const excelSourceTypes = new Map<number, Set<string>>()
+  for (const page of detail?.pages ?? []) {
+    if (documentsById.get(page.DOCUMENT_ID)?.SOURCE_TYPE !== 'EXCEL') continue
+    const types = excelSourceTypes.get(page.DOCUMENT_ID) ?? new Set<string>()
+    types.add(categoryOption(page.CATEGORY_ID).label)
+    excelSourceTypes.set(page.DOCUMENT_ID, types)
+  }
 
   const run = async (action: () => Promise<void>, success?: string) => {
     setBusy(true)
@@ -425,7 +456,9 @@ const MergePdfPage = () => {
       let pageCount = (draftRef.current ?? detail).pages.length
       // Validate the whole batch before inserting any pages into the working document.
       for (const upload of files) {
-        const response = await MergePdfServices.prepareFile(upload.file, importMode === 'combined', upload.categoryId)
+        const response = await MergePdfServices.prepareFile(
+          upload.file, importMode === 'combined', upload.categoryId, isExcelFile(upload.file) && !upload.typeSelected
+        )
         const prepared = response.data.ResultOnDb[0]
         if (!response.data.Status || !prepared) throw new Error(response.data.Message)
         pageCount += prepared.pageCount
@@ -438,7 +471,9 @@ const MergePdfPage = () => {
           const description = upload.description.trim() || null
           const { file } = upload
           const documentId = temporaryId.current--
-          const documentCategory = importMode === 'combined' ? 10 : upload.categoryId
+          const detectedTypes = new Set(prepared.classifications?.map(page => page.categoryId))
+          const documentCategory = importMode === 'combined' || detectedTypes.size > 1 ? 10
+            : (detectedTypes.values().next().value ?? upload.categoryId)
           const pages = Array.from({ length: prepared.pageCount }, (_, index) => ({
             PAGE_ID: temporaryId.current--,
             DOCUMENT_ID: documentId,
@@ -964,7 +999,10 @@ const MergePdfPage = () => {
                             </Stack>
                           </Box>
                           {files.map(upload => {
+                            const excel = isExcelFile(upload.file)
+                            const autoDetect = excel && !upload.typeSelected
                             const showDescription = importMode === 'combined' ||
+                              autoDetect ||
                               (upload.categoryId === 10 && (!upload.isDetecting || upload.typeSelected))
                             const extension = upload.file.name.split('.').pop()?.toUpperCase() ?? 'FILE'
                             const fileSize =
@@ -1028,18 +1066,14 @@ const MergePdfPage = () => {
                                         label='Document type'
                                         placeholder='Select ...'
                                         classNamePrefix='select'
-                                        options={categoryOptions}
-                                        value={categoryOptions.find(option => option.value === upload.categoryId)}
+                                        options={excel ? [autoDetectExcelType, ...categoryOptions] : categoryOptions}
+                                        value={autoDetect ? autoDetectExcelType : categoryOption(upload.categoryId)}
                                         isDisabled={busy}
                                         onChange={option => {
                                           if (option) {
-                                            setFiles(current =>
-                                              current.map(item =>
-                                                item.id === upload.id
-                                                  ? { ...item, categoryId: option.value, typeSelected: true }
-                                                  : item
-                                              )
-                                            )
+                                            setFiles(current => current.map(item => item.id === upload.id
+                                              ? { ...item, categoryId: option.value || 10, typeSelected: option.value !== 0 }
+                                              : item))
                                           }
                                         }}
                                       />
@@ -1058,7 +1092,7 @@ const MergePdfPage = () => {
                                         id={`merge-pdf-import-description-${upload.id}`}
                                         label='Description (optional)'
                                         fullWidth
-                                        placeholder={importMode === 'combined'
+                                        placeholder={importMode === 'combined' || autoDetect
                                           ? `Applies to ${categoryOption(10).label} pages`
                                           : `Describe this ${categoryOption(10).label} document`}
                                         value={upload.description}
@@ -1348,6 +1382,7 @@ const MergePdfPage = () => {
                               onSelect={() => {
                                 if (painted.current) { painted.current = false; return }
                                 setSelectedPageId(page.PAGE_ID)
+                                setPreviewZoom(null)
                                 setPreviewOpen(true)
                               }}
                               onRotate={delta => void rotatePage(page.PAGE_ID, delta)}
@@ -1392,7 +1427,9 @@ const MergePdfPage = () => {
                           sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap' }}
                         >
                           <Typography sx={{ flex: 1, minWidth: 200, overflowWrap: 'anywhere' }}>
-                            {categoryNames.get(document.CATEGORY_ID) ?? document.CATEGORY_NAME}:{' '}
+                            {excelSourceTypes.has(document.DOCUMENT_ID)
+                              ? Array.from(excelSourceTypes.get(document.DOCUMENT_ID)!).join(' / ')
+                              : categoryNames.get(document.CATEGORY_ID) ?? document.CATEGORY_NAME}:{' '}
                             <Button
                               disabled={busy}
                               onClick={() => void downloadSource(document.DOCUMENT_ID, document.ORIGINAL_FILE_NAME)}
@@ -1507,7 +1544,19 @@ const MergePdfPage = () => {
       <Dialog
         open={previewOpen && !!selectedPage}
         onClose={(_, reason) => {
-          if (!busy && reason !== 'backdropClick') setPreviewOpen(false)
+          if (!busy && reason !== 'backdropClick') closePagePreview()
+        }}
+        onKeyDown={event => {
+          if (event.defaultPrevented || busy || !detail || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return
+          if (event.target instanceof Element && event.target.closest(
+            'input, textarea, select, [contenteditable], [role="combobox"], [role="listbox"], [role="menu"], [role="slider"], [role="spinbutton"]'
+          )) return
+          const step = event.key === 'ArrowLeft' || event.key === 'ArrowUp' ? -1
+            : event.key === 'ArrowRight' || event.key === 'ArrowDown' ? 1 : 0
+          if (!step) return
+          event.preventDefault()
+          const next = detail.pages[selectedPageIndex + step]
+          if (next) setSelectedPageId(next.PAGE_ID)
         }}
         disableEscapeKeyDown={busy}
         TransitionComponent={Transition}
@@ -1526,7 +1575,7 @@ const MergePdfPage = () => {
               : 'Page preview'}
           </Typography>
           <DialogCloseButton
-            onClick={() => setPreviewOpen(false)}
+            onClick={closePagePreview}
             disabled={busy}
             aria-label='Close page preview'
             disableRipple
@@ -1560,6 +1609,8 @@ const MergePdfPage = () => {
                   <FitPagePreview
                     key={`${selectedPage.PAGE_ID}-${selectedPage.ROTATION_DEGREES}`}
                     pageNumber={selectedPage.SORT_ORDER}
+                    zoom={previewZoom}
+                    setZoom={setPreviewZoom}
                     previewUrl={previewUrl}
                     annotations={selectedPage.EDITOR_ANNOTATIONS ?? []}
                     coverClipboard={coverClipboard}
@@ -1569,8 +1620,7 @@ const MergePdfPage = () => {
                         page.PAGE_ID === selectedPage.PAGE_ID ? { ...page, EDITOR_ANNOTATIONS: annotations } : page
                       ) }))
                     }}
-                    visualDeskew={deskewInput.trim() !== '' && Number.isFinite(Number(deskewInput)) && Math.abs(Number(deskewInput)) <= 15
-                      ? Number(deskewInput) - (selectedPage.DESKEW_DEGREES ?? 0) : 0}
+                    visualDeskew={validDeskew ? deskewAngle - savedDeskew : 0}
                     stamp={selectedPageIndex === 0 ? {
                       name: detail.job.JOB_CODE,
                       coordinates: jobStampCoordinates(detail.job),
@@ -1658,8 +1708,6 @@ const MergePdfPage = () => {
                   <Box sx={{ border: 1, borderColor: 'divider', borderRadius: 1.5, p: 3 }}>
                     <Stack spacing={3}>
                       <Typography variant='subtitle1' fontWeight={600}>Adjust page</Typography>
-                  <Box>
-                    <Stack spacing={2}>
                       <CustomTextField
                         fullWidth
                         type='number'
@@ -1667,36 +1715,17 @@ const MergePdfPage = () => {
                         value={deskewInput}
                         disabled={busy}
                         onChange={event => setDeskewInput(event.target.value)}
+                        onBlur={commitDeskew}
+                        onKeyDown={event => {
+                          if (event.key === 'Enter' && event.target instanceof HTMLInputElement) {
+                            event.preventDefault()
+                            event.target.blur()
+                          }
+                        }}
+                        error={deskewInput !== '' && !validDeskew}
+                        helperText='-15 to 15 degrees · positive rotates left'
                         inputProps={{ min: -15, max: 15, step: 0.1 }}
                       />
-                      <Stack direction='row' spacing={2}>
-                      <Button
-                        variant='contained'
-                        sx={{ flex: 1 }}
-                        disabled={busy || deskewInput.trim() === '' || !Number.isFinite(Number(deskewInput)) || Math.abs(Number(deskewInput)) > 15}
-                        onClick={() => {
-                          const angle = Number(deskewInput)
-                          setCheckedPageIds([])
-                          void changeDraft(current => ({
-                            ...current,
-                            pages: current.pages.map(page => page.PAGE_ID === selectedPage.PAGE_ID ? { ...page, DESKEW_DEGREES: angle } : page)
-                          }))
-                        }}
-                      >
-                        Apply
-                      </Button>
-                      <Button variant='outlined' sx={{ flex: 1 }} disabled={busy || (!(selectedPage.DESKEW_DEGREES ?? 0) && deskewInput === '0')} onClick={() => {
-                        setDeskewInput('0')
-                        setCheckedPageIds([])
-                        void changeDraft(current => ({
-                          ...current,
-                          pages: current.pages.map(page => page.PAGE_ID === selectedPage.PAGE_ID ? { ...page, DESKEW_DEGREES: 0 } : page)
-                        }))
-                      }}>Reset</Button>
-                      </Stack>
-                    </Stack>
-                    <Typography variant='caption' color='text.secondary' display='block' sx={{ mt: 1.5 }}>-15 to 15 degrees &middot; positive rotates left</Typography>
-                  </Box>
                   <Stack direction='row' spacing={2}>
                     <Button
                       variant='outlined'
@@ -1792,7 +1821,7 @@ const MergePdfPage = () => {
           )}
         </DialogContent>
         <DialogActions>
-          <Button variant='tonal' color='secondary' disabled={busy} onClick={() => setPreviewOpen(false)}>
+          <Button variant='tonal' color='secondary' disabled={busy} onClick={closePagePreview}>
             Save and Close
           </Button>
         </DialogActions>

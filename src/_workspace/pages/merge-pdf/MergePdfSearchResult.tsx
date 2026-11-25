@@ -18,7 +18,7 @@ import type {
   MRT_SortingState,
   MRT_VisibilityState
 } from 'material-react-table'
-import { useFormContext } from 'react-hook-form'
+import { useFormContext, useWatch } from 'react-hook-form'
 import { useUpdateEffect } from 'react-use'
 
 import { useCheckPermission } from '@/_template/CheckPermission'
@@ -52,7 +52,7 @@ interface Props {
 
 const MergePdfSearchResult = ({ onOpen, onAdd, creatingDraft, refreshVersion }: Props) => {
   const { isEnableFetching, setIsEnableFetching, pagination, setPagination } = useDxContext()
-  const { getValues, setValue } = useFormContext<MergePdfListValues>()
+  const { control, getValues, setValue } = useFormContext<MergePdfListValues>()
   const checkPermission = useCheckPermission()
   const canEditHawb = Boolean(checkPermission(Number(import.meta.env.VITE_APPLICATION_ID), MENU_ID, 'IS_UPDATE', false))
   const { updateHawb } = useMergePdfActions()
@@ -75,6 +75,7 @@ const MergePdfSearchResult = ({ onOpen, onAdd, creatingDraft, refreshVersion }: 
     getValues('searchResults.columnVisibility')
   )
   const [columnOrder, setColumnOrder] = useState<MRT_ColumnOrderState>(getValues('searchResults.columnOrder'))
+  const columnSizing = useWatch({ name: 'searchResults.columnSizing', control })
   const [columnPinning, setColumnPinning] = useState<MRT_ColumnPinningState>(getValues('searchResults.columnPinning'))
   const [density, setDensity] = useState<MRT_DensityState>(getValues('searchResults.density'))
   const [columnFilters, setColumnFilters] = useState<MRT_ColumnFiltersState>(getValues('searchResults.columnFilters'))
@@ -160,7 +161,6 @@ const MergePdfSearchResult = ({ onOpen, onAdd, creatingDraft, refreshVersion }: 
         accessorKey: 'STATUS',
         header: 'STATUS',
         size: 140,
-        minSize: 140,
         enableColumnFilter: false,
         Cell: ({ row }) => (
           <Chip
@@ -183,7 +183,6 @@ const MergePdfSearchResult = ({ onOpen, onAdd, creatingDraft, refreshVersion }: 
         accessorKey: 'OUTPUT_FILE_NAME',
         header: 'PDF FILE',
         size: 180,
-        minSize: 180,
         enableSorting: false,
         enableColumnFilter: false,
         Cell: ({ row }) =>
@@ -193,10 +192,12 @@ const MergePdfSearchResult = ({ onOpen, onAdd, creatingDraft, refreshVersion }: 
                 setPreviewJob(row.original)
               }}
               size='small'
+              title={row.original.OUTPUT_FILE_NAME}
+              sx={{ maxWidth: '100%', minWidth: 0 }}
               disabled={row.original.INUSE === 0}
               startIcon={<i className='tabler-folder-open' />}
             >
-              {row.original.OUTPUT_FILE_NAME}
+              <Typography component='span' variant='inherit' noWrap>{row.original.OUTPUT_FILE_NAME}</Typography>
             </Button>
           ) : (
             '-'
@@ -206,7 +207,6 @@ const MergePdfSearchResult = ({ onOpen, onAdd, creatingDraft, refreshVersion }: 
         accessorKey: 'JOB_TITLE',
         header: 'DOCUMENT NAME',
         size: 240,
-        minSize: 220,
         filterVariant: 'text',
         columnFilterModeOptions: ['contains'],
         filterFn: 'contains',
@@ -217,7 +217,7 @@ const MergePdfSearchResult = ({ onOpen, onAdd, creatingDraft, refreshVersion }: 
         accessorKey: 'HAWB',
         header: 'HAWB',
         size: 190,
-        minSize: 125,
+        minSize: 85,
         enableSorting: false,
         enableColumnFilter: false,
         Cell: ({ row }) => {
@@ -283,18 +283,16 @@ const MergePdfSearchResult = ({ onOpen, onAdd, creatingDraft, refreshVersion }: 
         accessorKey: 'REVISION_NO',
         header: 'REVISION',
         size: 150,
-        minSize: 150,
         enableSorting: false,
         enableColumnFilter: false,
         Cell: ({ row }) => (row.original.REVISION_NO > 0 ? row.original.REVISION_NO : '-')
       },
-      { accessorKey: 'DOCUMENT_COUNT', header: 'FILES', size: 155, minSize: 150, enableColumnFilter: false },
-      { accessorKey: 'PAGE_COUNT', header: 'PAGES', size: 155, minSize: 150, enableColumnFilter: false },
+      { accessorKey: 'DOCUMENT_COUNT', header: 'FILES', size: 155, enableColumnFilter: false },
+      { accessorKey: 'PAGE_COUNT', header: 'PAGES', size: 155, enableColumnFilter: false },
       {
         accessorKey: 'CREATE_DATE',
         header: 'CREATE DATE',
         size: 190,
-        minSize: 190,
         enableColumnFilter: false,
         Cell: ({ row }) =>
           row.original.CREATE_DATE ? dayjs(row.original.CREATE_DATE).format('DD-MMM-YYYY HH:mm:ss') : '-'
@@ -303,7 +301,6 @@ const MergePdfSearchResult = ({ onOpen, onAdd, creatingDraft, refreshVersion }: 
         accessorKey: 'CREATE_BY',
         header: 'CREATE BY',
         size: 160,
-        minSize: 160,
         filterVariant: 'text',
         columnFilterModeOptions: ['contains'],
         filterFn: 'contains',
@@ -313,7 +310,6 @@ const MergePdfSearchResult = ({ onOpen, onAdd, creatingDraft, refreshVersion }: 
         accessorKey: 'UPDATE_DATE',
         header: 'UPDATE DATE',
         size: 190,
-        minSize: 190,
         enableColumnFilter: false,
         Cell: ({ row }) => dayjs(row.original.UPDATE_DATE).format('DD-MMM-YYYY HH:mm:ss')
       },
@@ -321,7 +317,6 @@ const MergePdfSearchResult = ({ onOpen, onAdd, creatingDraft, refreshVersion }: 
         accessorKey: 'UPDATE_BY',
         header: 'UPDATE BY',
         size: 160,
-        minSize: 160,
         filterVariant: 'text',
         columnFilterModeOptions: ['contains'],
         filterFn: 'contains'
@@ -377,11 +372,19 @@ const MergePdfSearchResult = ({ onOpen, onAdd, creatingDraft, refreshVersion }: 
           onDensityChange={setDensity}
           onColumnPinningChange={setColumnPinning}
           onColumnOrderChange={setColumnOrder}
-          layoutMode='grid'
+          onColumnSizingChange={update => {
+            const current = getValues('searchResults.columnSizing')
+            setValue('searchResults.columnSizing', typeof update === 'function' ? update(current) : update)
+          }}
+          columnResizeMode='onEnd'
+          layoutMode='grid-no-grow'
+          defaultColumn={{ minSize: 55 }}
           displayColumnDefOptions={{
             'mrt-row-actions': {
               header: 'Actions',
               size: 135,
+              minSize: 112,
+              enableResizing: true,
               grow: false,
               muiTableHeadCellProps: { align: 'center' },
               muiTableBodyCellProps: { align: 'center' }
@@ -397,6 +400,7 @@ const MergePdfSearchResult = ({ onOpen, onAdd, creatingDraft, refreshVersion }: 
             sorting,
             density,
             columnVisibility,
+            columnSizing,
             columnPinning,
             columnOrder: withDocumentColumns(columnOrder, categoryColumns.map(category => category.id)),
             columnFilterFns
@@ -480,9 +484,8 @@ const MergePdfSearchResult = ({ onOpen, onAdd, creatingDraft, refreshVersion }: 
         }}
         sx={{
           '& .MuiDialog-paper': { overflow: 'visible' },
-          '& .MuiDialog-container': { justifyContent: 'center', alignItems: 'flex-start' }
+          '& .MuiDialog-container': { justifyContent: 'center', alignItems: 'center' }
         }}
-        PaperProps={{ sx: { top: 30, m: 0 } }}
       >
         <DialogTitle id='merge-pdf-hawb-title'>
           <Typography variant='h5' component='span'>Edit HAWB</Typography>

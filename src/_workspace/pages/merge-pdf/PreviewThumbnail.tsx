@@ -7,6 +7,9 @@ export default function PreviewThumbnail({ jobId, page, localImage, selected, on
   const ref = useRef<HTMLButtonElement | null>(null)
   const [visible, setVisible] = useState(false)
   useEffect(() => {
+    if (selected) ref.current?.scrollIntoView({ block: 'nearest' })
+  }, [selected])
+  useEffect(() => {
     if (!ref.current) return
     const observer = new IntersectionObserver(entries => setVisible(entries[0]?.isIntersecting ?? false), { rootMargin: '150px' })
     observer.observe(ref.current)

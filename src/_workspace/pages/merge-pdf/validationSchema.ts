@@ -51,6 +51,7 @@ export const mergePdfListSchema = z.object({
     columnVisibility: z.record(z.string(), z.boolean()),
     columnPinning: z.object({ left: z.array(z.string()).optional(), right: z.array(z.string()).optional() }),
     columnOrder: z.array(z.string()),
+    columnSizing: z.record(z.string(), z.number().positive()),
     columnOrderVersion: z.number().optional(),
     needsColumnOrderMigration: z.boolean().optional(),
     columnFilterFns: z.any()
@@ -80,6 +81,7 @@ const defaultListValues = (): MergePdfListValues => ({
     columnVisibility: Object.fromEntries(columns.map(column => [column, true])),
     columnPinning: { left: ['mrt-row-actions'], right: [] },
     columnOrder: Array.from(columns),
+    columnSizing: {},
     columnOrderVersion: 1,
     needsColumnOrderMigration: false,
     columnFilterFns: {
@@ -135,6 +137,9 @@ export const fetchMergePdfListValues = async (menuId: number): Promise<MergePdfL
           currentColumns.has(filter.id)
         ),
         columnOrder,
+        columnSizing: Object.fromEntries(Object.entries(saved.searchResults?.columnSizing ?? {}).filter(
+          ([, width]) => typeof width === 'number' && Number.isFinite(width) && width > 0
+        )),
         columnOrderVersion: 1,
         needsColumnOrderMigration,
         columnVisibility: { ...defaults.searchResults.columnVisibility, ...saved.searchResults?.columnVisibility },
