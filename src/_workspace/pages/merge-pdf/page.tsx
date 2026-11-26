@@ -62,7 +62,7 @@ import SortablePage from './SortablePage'
 import PreviewThumbnail from './PreviewThumbnail'
 import FitPagePreview from './FitPagePreview'
 import type { CoverAnnotation } from './pageAnnotations'
-import { jobStampCoordinates } from './stampPlacement'
+import { DEFAULT_STAMP_FONT_SIZE, jobStampCoordinates } from './stampPlacement'
 import MergePdfList from './MergePdfList'
 import MergePdfPageThumbnail from './MergePdfPageThumbnail'
 import { breadcrumbNavigation, MENU_NAME } from './env'
@@ -1624,7 +1624,7 @@ const MergePdfPage = () => {
                     stamp={selectedPageIndex === 0 ? {
                       name: detail.job.JOB_CODE,
                       coordinates: jobStampCoordinates(detail.job),
-                      fontSize: detail.job.STAMP_FONT_SIZE ?? 10,
+                      fontSize: detail.job.STAMP_FONT_SIZE ?? DEFAULT_STAMP_FONT_SIZE,
                       style: detail.job.STAMP_STYLE ?? undefined
                     } : undefined}
                     onStampStyleChange={busy ? undefined : fields => {

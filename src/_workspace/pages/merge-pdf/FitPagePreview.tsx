@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query'
 import { getDocument, GlobalWorkerOptions, type PDFPageProxy } from 'pdfjs-dist'
 import workerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
 import {
+  DEFAULT_STAMP_FONT_SIZE,
   jobStampCoordinates,
   indexFont,
   indexTextWidth,
@@ -59,7 +60,7 @@ export default function FitPagePreview({ previewUrl, pageNumber, zoom, setZoom, 
     id: number; x: number; y: number; fontSize: number; textWidth: number; left: number; top: number;
     corner: { x: number; y: number }; preview: ReturnType<typeof resizeStamp>
   } | null>(null)
-  const stampFontSize = resizePreview?.fontSize ?? stamp?.fontSize ?? 10
+  const stampFontSize = resizePreview?.fontSize ?? stamp?.fontSize ?? DEFAULT_STAMP_FONT_SIZE
   const stampStyle = stamp?.style ?? defaultStampStyle
   const hasSavedIndexFont = isSystemFont(stampStyle.fontFamily)
   const localFonts = useQuery({

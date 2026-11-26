@@ -5,6 +5,8 @@ export interface StampCoordinates {
   y: number
 }
 
+export const DEFAULT_STAMP_FONT_SIZE = 25
+
 export const stampVerticalMetrics = (size: number, style: TextStyle) => {
   const custom = usesCustomFont(style)
   const system = isSystemFont(style.fontFamily)
@@ -20,7 +22,7 @@ export const jobStampCoordinates = (job: {
   STAMP_FONT_SIZE?: number | null
   STAMP_STYLE?: TextStyle | null
 }): StampCoordinates & { fontSize: number; style?: TextStyle } => ({
-  x: job.STAMP_X ?? 1, y: job.STAMP_Y ?? 0, fontSize: job.STAMP_FONT_SIZE ?? 10, style: job.STAMP_STYLE ?? undefined
+  x: job.STAMP_X ?? 1, y: job.STAMP_Y ?? 0, fontSize: job.STAMP_FONT_SIZE ?? DEFAULT_STAMP_FONT_SIZE, style: job.STAMP_STYLE ?? undefined
 })
 
 export const indexFont = (style: TextStyle, size: number): string =>
